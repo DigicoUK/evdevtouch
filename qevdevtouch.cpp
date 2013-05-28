@@ -138,6 +138,7 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr)
 {
 //    m_forceToActiveWindow = args.contains(QLatin1String("force_window"));
     m_forceToActiveWindow = false;
+    qDebug("QEvdevTouchScreenData() id: %d", q->m_id);
 }
 
 void QEvdevTouchScreenData::registerDevice()
@@ -283,7 +284,8 @@ void QEvdevTouchScreenDevice::readData()
 {
     ::input_event buffer[32];
     int n = 0;
-    for (; ;) {
+    for(;;)
+    {
 #ifdef USE_MTDEV
         int result = mtdev_get(m_mtdev, m_fd, buffer, sizeof(buffer) / sizeof(::input_event));
         if (result > 0)
@@ -291,13 +293,18 @@ void QEvdevTouchScreenDevice::readData()
 #else
         int result = QT_READ(m_fd, reinterpret_cast<char*>(buffer) + n, sizeof(buffer) - n);
 #endif
-        if (!result) {
+        if (!result)
+        {
             qWarning("Got EOF from input device");
             return;
-        } else if (result < 0) {
-            if (errno != EINTR && errno != EAGAIN) {
+        }
+        else if (result < 0)
+        {
+            if (errno != EINTR && errno != EAGAIN)
+            {
                 qWarning("Could not read from input device: %s", strerror(errno));
-                if (errno == ENODEV) { // device got disconnected -> stop reading
+                if (errno == ENODEV) // device got disconnected -> stop reading
+                {
                     delete m_notify;
                     m_notify = 0;
                     QT_CLOSE(m_fd);
@@ -305,7 +312,9 @@ void QEvdevTouchScreenDevice::readData()
                 }
                 return;
             }
-        } else {
+        }
+        else
+        {
             n += result;
             if (n % sizeof(::input_event) == 0)
                 break;
@@ -320,45 +329,56 @@ void QEvdevTouchScreenDevice::readData()
 
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
 {
-    if (data->type == EV_ABS) {
-
-        if (data->code == ABS_MT_POSITION_X) {
+    if (data->type == EV_ABS)
+    {
+        if (data->code == ABS_MT_POSITION_X)
+        {
             m_currentData.x = qBound(hw_range_x_min, data->value, hw_range_x_max);
             if (m_typeB)
                 m_contacts[m_currentSlot].x = m_currentData.x;
-        } else if (data->code == ABS_MT_POSITION_Y) {
+        }
+        else if (data->code == ABS_MT_POSITION_Y)
+        {
             m_currentData.y = qBound(hw_range_y_min, data->value, hw_range_y_max);
             if (m_typeB)
                 m_contacts[m_currentSlot].y = m_currentData.y;
-        } else if (data->code == ABS_MT_TRACKING_ID) {
+        }
+        else if (data->code == ABS_MT_TRACKING_ID)
+        {
             m_currentData.trackingId = data->value;
-            if (m_typeB) {
+            if (m_typeB)
+            {
                 if (m_currentData.trackingId == -1)
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 else
                     m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
             }
-        } else if (data->code == ABS_MT_TOUCH_MAJOR) {
+        }
+        else if (data->code == ABS_MT_TOUCH_MAJOR)
+        {
             m_currentData.maj = data->value;
             if (data->value == 0)
                 m_currentData.state = Qt::TouchPointReleased;
             if (m_typeB)
                 m_contacts[m_currentSlot].maj = m_currentData.maj;
-        } else if (data->code == ABS_PRESSURE) {
+        }
+        else if (data->code == ABS_PRESSURE)
+        {
             m_currentData.pressure = qBound(hw_pressure_min, data->value, hw_pressure_max);
             if (m_typeB)
                 m_contacts[m_currentSlot].pressure = m_currentData.pressure;
-        } else if (data->code == ABS_MT_SLOT) {
-            m_currentSlot = data->value;
         }
+        else if (data->code == ABS_MT_SLOT)
+            m_currentSlot = data->value;
 
-    } else if (data->type == EV_KEY && !m_typeB) {
+    }
+    else if (data->type == EV_KEY && !m_typeB)
+    {
         if (data->code == BTN_TOUCH && data->value == 0)
-          {
             m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
-          }
-    } else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN) {
-
+    }
+    else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN)
+    {
         // If there is no tracking id, one will be generated later.
         // Until that use a temporary key.
         int key = m_currentData.trackingId;
@@ -368,8 +388,9 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         m_contacts.insert(key, m_currentData);
         m_currentData = Contact();
 
-    } else if (data->type == EV_SYN && data->code == SYN_REPORT) {
-
+    }
+    else if (data->type == EV_SYN && data->code == SYN_REPORT)
+    {
         // Ensure valid IDs even when the driver does not report ABS_MT_TRACKING_ID.
         if (!m_contacts.isEmpty() && m_contacts.constBegin().value().trackingId == -1)
             assignIds();
@@ -377,7 +398,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         m_touchPoints.clear();
         Qt::TouchPointStates combinedStates;
         QMutableHashIterator<int, Contact> it(m_contacts);
-        while (it.hasNext()) {
+        while (it.hasNext())
+        {
             it.next();
             QWindowSystemInterface::TouchPoint tp;
             Contact &contact(it.value());
@@ -385,22 +407,26 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             tp.flags = contact.flags;
 
             int key = m_typeB ? it.key() : contact.trackingId;
-            if (m_lastContacts.contains(key)) {
+            if (m_lastContacts.contains(key))
+            {
                 const Contact &prev(m_lastContacts.value(key));
-                if (contact.state == Qt::TouchPointReleased) {
+                if (contact.state == Qt::TouchPointReleased)
+                {
                     // Copy over the previous values for released points, just in case.
                     contact.x = prev.x;
                     contact.y = prev.y;
                     contact.maj = prev.maj;
-                } else {
+                }
+                else
+                {
                     contact.state = (prev.x == contact.x && prev.y == contact.y)
                             ? Qt::TouchPointStationary : Qt::TouchPointMoved;
                 }
             }
 
             // Avoid reporting a contact in released state more than once.
-            if (contact.state == Qt::TouchPointReleased
-                    && !m_lastContacts.contains(key)) {
+            if (contact.state == Qt::TouchPointReleased && !m_lastContacts.contains(key))
+            {
                 it.remove();
                 continue;
             }
@@ -437,13 +463,14 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 int QEvdevTouchScreenData::findClosestContact(const QHash<int, Contact> &contacts, int x, int y, int *dist)
 {
     int minDist = -1, id = -1;
-    for (QHash<int, Contact>::const_iterator it = contacts.constBegin(), ite = contacts.constEnd();
-         it != ite; ++it) {
+    for (QHash<int, Contact>::const_iterator it = contacts.constBegin(), ite = contacts.constEnd(); it != ite; ++it)
+    {
         const Contact &contact(it.value());
         int dx = x - contact.x;
         int dy = y - contact.y;
         int dist = dx * dx + dy * dy;
-        if (minDist == -1 || dist < minDist) {
+        if (minDist == -1 || dist < minDist)
+        {
             minDist = dist;
             id = contact.trackingId;
         }
@@ -458,18 +485,22 @@ void QEvdevTouchScreenData::assignIds()
     QHash<int, Contact> candidates = m_lastContacts, pending = m_contacts, newContacts;
     int maxId = -1;
     QHash<int, Contact>::iterator it, ite, bestMatch;
-    while (!pending.isEmpty() && !candidates.isEmpty()) {
+    while (!pending.isEmpty() && !candidates.isEmpty())
+    {
         int bestDist = -1, bestId = 0;
-        for (it = pending.begin(), ite = pending.end(); it != ite; ++it) {
+        for (it = pending.begin(), ite = pending.end(); it != ite; ++it)
+        {
             int dist;
             int id = findClosestContact(candidates, it->x, it->y, &dist);
-            if (id >= 0 && (bestDist == -1 || dist < bestDist)) {
+            if (id >= 0 && (bestDist == -1 || dist < bestDist))
+            {
                 bestDist = dist;
                 bestId = id;
                 bestMatch = it;
             }
         }
-        if (bestDist >= 0) {
+        if (bestDist >= 0)
+        {
             bestMatch->trackingId = bestId;
             newContacts.insert(bestId, *bestMatch);
             candidates.remove(bestId);
@@ -478,8 +509,10 @@ void QEvdevTouchScreenData::assignIds()
                 maxId = bestId;
         }
     }
-    if (candidates.isEmpty()) {
-        for (it = pending.begin(), ite = pending.end(); it != ite; ++it) {
+    if (candidates.isEmpty())
+    {
+        for (it = pending.begin(), ite = pending.end(); it != ite; ++it)
+        {
             it->trackingId = ++maxId;
             newContacts.insert(it->trackingId, *it);
         }
@@ -490,14 +523,15 @@ void QEvdevTouchScreenData::assignIds()
 void QEvdevTouchScreenData::reportPoints()
 {
     QRect winRect;
-    if (m_forceToActiveWindow) {
+    if (m_forceToActiveWindow)
+    {
         QWindow *win = QGuiApplication::focusWindow();
         if (!win)
             return;
         winRect = win->geometry();
-    } else {
-        winRect = QGuiApplication::primaryScreen()->geometry();
     }
+    else
+        winRect = QGuiApplication::primaryScreen()->geometry();
 
     const int hw_w = hw_range_x_max - hw_range_x_min;
     const int hw_h = hw_range_y_max - hw_range_y_min;
@@ -505,7 +539,8 @@ void QEvdevTouchScreenData::reportPoints()
     // Map the coordinates based on the normalized position. QPA expects 'area'
     // to be in screen coordinates.
     const int pointCount = m_touchPoints.count();
-    for (int i = 0; i < pointCount; ++i) {
+    for (int i = 0; i < pointCount; ++i)
+    {
         QWindowSystemInterface::TouchPoint &tp(m_touchPoints[i]);
 
         // Generate a screen position that is always inside the active window

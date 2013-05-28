@@ -66,6 +66,8 @@ public:
     explicit QEvdevTouchScreenDevice(const QString &dev, int id);
     ~QEvdevTouchScreenDevice();
 
+    int m_id;
+
 private slots:
     void readData();
 
@@ -73,7 +75,6 @@ private:
     QSocketNotifier *m_notify;
     int m_fd;
     QEvdevTouchScreenData *m_d;
-    int m_id;
     int m_xOffset;
 #ifdef USE_MTDEV
     mtdev *m_mtdev;
