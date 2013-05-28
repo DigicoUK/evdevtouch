@@ -351,7 +351,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 if (m_currentData.trackingId == -1)
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 else
-                    m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
+                    m_contacts[m_currentSlot].trackingId = m_currentData.trackingId + q->m_id * 5;
             }
         }
         else if (data->code == ABS_MT_TOUCH_MAJOR)
