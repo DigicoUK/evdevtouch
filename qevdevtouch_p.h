@@ -88,17 +88,6 @@ public:
     explicit QEvdevTouchScreenHandler(const QString &spec = QString(), QObject *parent = 0);
     ~QEvdevTouchScreenHandler();
 
-//private slots:
-//    void readData();
-
-//private:
-//    QSocketNotifier *m_notify;
-//    int m_fd;
-//    QEvdevTouchScreenData *m_d;
-//#ifdef USE_MTDEV
-//    mtdev *m_mtdev;
-//#endif
-
 private:
     QList<QEvdevTouchScreenDevice *> m_deviceList;
 };
