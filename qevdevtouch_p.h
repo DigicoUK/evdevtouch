@@ -58,6 +58,28 @@ class QEvdevTouchScreenData;
 struct mtdev;
 #endif
 
+class QEvdevTouchScreenDevice : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit QEvdevTouchScreenDevice(const QString &dev, int id);
+    ~QEvdevTouchScreenDevice();
+
+private slots:
+    void readData();
+
+private:
+    QSocketNotifier *m_notify;
+    int m_fd;
+    QEvdevTouchScreenData *m_d;
+    int m_id;
+    int m_xOffset;
+#ifdef USE_MTDEV
+    mtdev *m_mtdev;
+#endif
+};
+
 class QEvdevTouchScreenHandler : public QObject
 {
     Q_OBJECT
@@ -66,16 +88,19 @@ public:
     explicit QEvdevTouchScreenHandler(const QString &spec = QString(), QObject *parent = 0);
     ~QEvdevTouchScreenHandler();
 
-private slots:
-    void readData();
+//private slots:
+//    void readData();
+
+//private:
+//    QSocketNotifier *m_notify;
+//    int m_fd;
+//    QEvdevTouchScreenData *m_d;
+//#ifdef USE_MTDEV
+//    mtdev *m_mtdev;
+//#endif
 
 private:
-    QSocketNotifier *m_notify;
-    int m_fd;
-    QEvdevTouchScreenData *d;
-#ifdef USE_MTDEV
-    mtdev *m_mtdev;
-#endif
+    QList<QEvdevTouchScreenDevice *> m_deviceList;
 };
 
 class QEvdevTouchScreenHandlerThread : public QThread

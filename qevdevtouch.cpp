@@ -85,12 +85,12 @@ QT_BEGIN_NAMESPACE
 class QEvdevTouchScreenData
 {
 public:
-    QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args);
+    QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr);
 
     void processInputEvent(input_event *data);
     void assignIds();
 
-    QEvdevTouchScreenHandler *q;
+    QEvdevTouchScreenDevice *q;
     int m_lastEventType;
     QList<QWindowSystemInterface::TouchPoint> m_touchPoints;
 
@@ -127,7 +127,7 @@ public:
     bool m_typeB;
 };
 
-QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args)
+QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr)
     : q(q_ptr),
       m_lastEventType(-1),
       m_currentSlot(0),
@@ -136,7 +136,8 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, co
       hw_pressure_min(0), hw_pressure_max(0),
       m_device(0), m_typeB(false)
 {
-    m_forceToActiveWindow = args.contains(QLatin1String("force_window"));
+//    m_forceToActiveWindow = args.contains(QLatin1String("force_window"));
+    m_forceToActiveWindow = false;
 }
 
 void QEvdevTouchScreenData::registerDevice()
@@ -159,16 +160,126 @@ static inline bool testBit(long bit, const long *array)
     return (array[bit / LONG_BITS] >> bit % LONG_BITS) & 1;
 }
 
-QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject *parent)
-    : QObject(parent), m_notify(0), m_fd(-1), d(0)
+QEvdevTouchScreenDevice::QEvdevTouchScreenDevice(const QString &dev, int id)
+    : m_notify(0), m_fd(-1), m_d(0), m_id(id), m_xOffset(-1280 * id)
 #ifdef USE_MTDEV
       , m_mtdev(0)
 #endif
 {
+    setObjectName(QLatin1String("Evdev Touch Handler Device subclass"));
+    qDebug("evdevtouch (instance): Using device %s", qPrintable(dev));
+
+    if(dev.isEmpty())
+        return;
+
+    m_fd = QT_OPEN(dev.toLocal8Bit().constData(), O_RDONLY | O_NDELAY, 0);
+
+    if (m_fd >= 0) {
+        m_notify = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
+        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData())); // TODO: should we need a destructor for this? (disconnect or something?)
+    } else {
+        qErrnoWarning(errno, "Cannot open input device %s", qPrintable(dev));
+        return;
+    }
+
+#ifdef USE_MTDEV
+    m_mtdev = static_cast<mtdev *>(calloc(1, sizeof(mtdev)));
+    int mtdeverr = mtdev_open(m_mtdev, m_fd);
+    if (mtdeverr) {
+        qWarning("mtdev_open failed: %d", mtdeverr);
+        QT_CLOSE(m_fd);
+        return;
+    }
+#endif
+
+    m_d = new QEvdevTouchScreenData(this);
+
+    input_absinfo absInfo;
+    memset(&absInfo, 0, sizeof(input_absinfo));
+    if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_X), &absInfo) >= 0) {
+        qDebug("min X: %d max X: %d", absInfo.minimum, absInfo.maximum);
+//        m_d->hw_range_x_min = absInfo.minimum;
+//        m_d->hw_range_x_max = absInfo.maximum;
+//        m_d->hw_range_x_min = -1280;
+//        m_d->hw_range_x_max = 1280;
+        m_d->hw_range_x_min = 0 + m_xOffset;
+        m_d->hw_range_x_max = 2560 + m_xOffset;
+    }
+    if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_Y), &absInfo) >= 0) {
+        qDebug("min Y: %d max Y: %d", absInfo.minimum, absInfo.maximum);
+        m_d->hw_range_y_min = absInfo.minimum;
+        m_d->hw_range_y_max = absInfo.maximum;
+    }
+    if (ioctl(m_fd, EVIOCGABS(ABS_PRESSURE), &absInfo) >= 0) {
+        qDebug("min pressure: %d max pressure: %d", absInfo.minimum, absInfo.maximum);
+        if (absInfo.maximum > absInfo.minimum) {
+            m_d->hw_pressure_min = absInfo.minimum;
+            m_d->hw_pressure_max = absInfo.maximum;
+        }
+    }
+    char name[1024];
+    if (ioctl(m_fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0) {
+        m_d->hw_name = QString::fromLocal8Bit(name);
+        qDebug("device name: %s", name);
+    }
+
+    bool grabSuccess = !ioctl(m_fd, EVIOCGRAB, (void *) 1);
+    if (grabSuccess)
+        ioctl(m_fd, EVIOCGRAB, (void *) 0);
+    else
+        qWarning("ERROR: The device is grabbed by another process. No events will be read.");
+
+#ifdef USE_MTDEV
+    const char *mtdevStr = "(mtdev)";
+    m_d->m_typeB = true;
+#else
+    const char *mtdevStr = "";
+    m_d->m_typeB = false;
+    long absbits[NUM_LONGS(ABS_CNT)];
+    if (ioctl(m_fd, EVIOCGBIT(EV_ABS, sizeof(absbits)), absbits) >= 0)
+        m_d->m_typeB = testBit(ABS_MT_SLOT, absbits);
+#endif
+    qDebug("Protocol type %c %s", m_d->m_typeB ? 'B' : 'A', mtdevStr);
+
+    m_d->registerDevice();
+}
+
+QEvdevTouchScreenDevice::~QEvdevTouchScreenDevice()
+{
+#ifdef USE_MTDEV
+    if (m_mtdev) {
+        mtdev_close(m_mtdev);
+        free(m_mtdev);
+    }
+#endif
+
+    if (m_fd >= 0)
+        QT_CLOSE(m_fd);
+
+    delete m_d;
+}
+
+//QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject *parent)
+//    : QObject(parent), m_notify(0), m_fd(-1), m_d(0)
+//    #ifdef USE_MTDEV
+//    , m_mtdev(0)
+//    #endif
+QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject *parent)
+    : QObject(parent)
+{
     setObjectName(QLatin1String("Evdev Touch Handler"));
 
-    QString dev;
+    // only the first device argument is used for now
+    QStringList args = spec.split(QLatin1Char(':'));
+    for(int i = 0; i < args.count(); i++)
+    {
+        if(args.at(i).startsWith(QLatin1String("/dev/")))
+        {
+            m_deviceList.append(new QEvdevTouchScreenDevice(args.at(i), i));
+        }
+    }
 
+/*
     // only the first device argument is used for now
     QStringList args = spec.split(QLatin1Char(':'));
     for (int i = 0; i < args.count(); ++i) {
@@ -193,7 +304,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject 
     if (dev.isEmpty())
         return;
 
-    qDebug("evdevtouch: Using device %s", qPrintable(dev));
+    qDebug("evdevtouch (hakced): Using device %s", qPrintable(dev));
     m_fd = QT_OPEN(dev.toLocal8Bit().constData(), O_RDONLY | O_NDELAY, 0);
 
     if (m_fd >= 0) {
@@ -214,30 +325,30 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject 
     }
 #endif
 
-    d = new QEvdevTouchScreenData(this, args);
+    m_d = new QEvdevTouchScreenData(this, args);
 
     input_absinfo absInfo;
     memset(&absInfo, 0, sizeof(input_absinfo));
     if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_X), &absInfo) >= 0) {
         qDebug("min X: %d max X: %d", absInfo.minimum, absInfo.maximum);
-        d->hw_range_x_min = absInfo.minimum;
-        d->hw_range_x_max = absInfo.maximum;
+        m_d->hw_range_x_min = absInfo.minimum;
+        m_d->hw_range_x_max = absInfo.maximum;
     }
     if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_Y), &absInfo) >= 0) {
         qDebug("min Y: %d max Y: %d", absInfo.minimum, absInfo.maximum);
-        d->hw_range_y_min = absInfo.minimum;
-        d->hw_range_y_max = absInfo.maximum;
+        m_d->hw_range_y_min = absInfo.minimum;
+        m_d->hw_range_y_max = absInfo.maximum;
     }
     if (ioctl(m_fd, EVIOCGABS(ABS_PRESSURE), &absInfo) >= 0) {
         qDebug("min pressure: %d max pressure: %d", absInfo.minimum, absInfo.maximum);
         if (absInfo.maximum > absInfo.minimum) {
-            d->hw_pressure_min = absInfo.minimum;
-            d->hw_pressure_max = absInfo.maximum;
+            m_d->hw_pressure_min = absInfo.minimum;
+            m_d->hw_pressure_max = absInfo.maximum;
         }
     }
     char name[1024];
     if (ioctl(m_fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0) {
-        d->hw_name = QString::fromLocal8Bit(name);
+        m_d->hw_name = QString::fromLocal8Bit(name);
         qDebug("device name: %s", name);
     }
 
@@ -249,35 +360,41 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject 
 
 #ifdef USE_MTDEV
     const char *mtdevStr = "(mtdev)";
-    d->m_typeB = true;
+    m_d->m_typeB = true;
 #else
     const char *mtdevStr = "";
-    d->m_typeB = false;
+    m_d->m_typeB = false;
     long absbits[NUM_LONGS(ABS_CNT)];
     if (ioctl(m_fd, EVIOCGBIT(EV_ABS, sizeof(absbits)), absbits) >= 0)
-        d->m_typeB = testBit(ABS_MT_SLOT, absbits);
+        m_d->m_typeB = testBit(ABS_MT_SLOT, absbits);
 #endif
-    qDebug("Protocol type %c %s", d->m_typeB ? 'B' : 'A', mtdevStr);
+    qDebug("Protocol type %c %s", m_d->m_typeB ? 'B' : 'A', mtdevStr);
 
-    d->registerDevice();
+    m_d->registerDevice();
+*/
 }
 
 QEvdevTouchScreenHandler::~QEvdevTouchScreenHandler()
 {
-#ifdef USE_MTDEV
-    if (m_mtdev) {
-        mtdev_close(m_mtdev);
-        free(m_mtdev);
+//#ifdef USE_MTDEV
+//    if (m_mtdev) {
+//        mtdev_close(m_mtdev);
+//        free(m_mtdev);
+//    }
+//#endif
+
+//    if (m_fd >= 0)
+//        QT_CLOSE(m_fd);
+
+//    delete m_d;
+
+    for(int i = 0; i < m_deviceList.size(); i++)
+    {
+        delete m_deviceList[i];
     }
-#endif
-
-    if (m_fd >= 0)
-        QT_CLOSE(m_fd);
-
-    delete d;
 }
 
-void QEvdevTouchScreenHandler::readData()
+void QEvdevTouchScreenDevice::readData()
 {
     ::input_event buffer[32];
     int n = 0;
@@ -313,7 +430,7 @@ void QEvdevTouchScreenHandler::readData()
     n /= sizeof(::input_event);
 
     for (int i = 0; i < n; ++i)
-        d->processInputEvent(&buffer[i]);
+        m_d->processInputEvent(&buffer[i]);
 }
 
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
