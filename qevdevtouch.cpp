@@ -345,13 +345,13 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         }
         else if (data->code == ABS_MT_TRACKING_ID)
         {
-            m_currentData.trackingId = data->value;
+            m_currentData.trackingId = data->value + q->m_id * 5;
             if (m_typeB)
             {
                 if (m_currentData.trackingId == -1)
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 else
-                    m_contacts[m_currentSlot].trackingId = m_currentData.trackingId + q->m_id * 5;
+                    m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
             }
         }
         else if (data->code == ABS_MT_TOUCH_MAJOR)
