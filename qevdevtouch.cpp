@@ -99,7 +99,7 @@ public:
     int hw_pressure_min;
     int hw_pressure_max;
     QString hw_name;
-    bool m_forceToActiveWindow;
+//    bool m_forceToActiveWindow;
     QTouchDevice *m_device;
     bool m_typeB;
 };
@@ -114,7 +114,7 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr)
       m_device(0), m_typeB(false)
 {
 //    m_forceToActiveWindow = args.contains(QLatin1String("force_window"));
-    m_forceToActiveWindow = false;
+//    m_forceToActiveWindow = false;
     qDebug("QEvdevTouchScreenData() id: %d", q->m_id);
 }
 
@@ -340,15 +340,15 @@ void QEvdevTouchScreenData::assignIds()
 void QEvdevTouchScreenData::reportPoints()
 {
     QRect winRect;
-    if (m_forceToActiveWindow)
-    {
-        QWindow *win = QGuiApplication::focusWindow();
-        if (!win)
-            return;
-        winRect = win->geometry();
-    }
-    else
-        winRect = QGuiApplication::primaryScreen()->geometry();
+//    if (m_forceToActiveWindow)
+//    {
+//        QWindow *win = QGuiApplication::focusWindow();
+//        if (!win)
+//            return;
+//        winRect = win->geometry();
+//    }
+//    else
+    winRect = QGuiApplication::primaryScreen()->geometry();
 
 //    const int hw_w = hw_range_x_max - hw_range_x_min;
 //    const int hw_h = hw_range_y_max - hw_range_y_min;
