@@ -172,6 +172,9 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             qDebug("    ABS_MT_SLOT: %d", data->value);
             m_currentSlot = data->value;
         }
+        else
+            qDebug("    unhandled event code: 0x%x %d", data->code, data->value);
+// #define ABS_MT_WIDTH_MAJOR	0x32	/* Major axis of approaching ellipse */ // (touch size?)
     }
     else if (data->type == EV_KEY && !m_typeB)
     {
@@ -312,7 +315,7 @@ QEvdevTouchScreenDevice::QEvdevTouchScreenDevice(const QString &dev, int id)
 
     if (m_fd >= 0) {
         m_notify = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
-        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData())); // TODO: should we need a destructor for this? (disconnect or something?)
+        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData()), Qt::DirectConnection);
     } else {
         qErrnoWarning(errno, "Cannot open input device %s", qPrintable(dev));
         return;
