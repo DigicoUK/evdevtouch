@@ -92,6 +92,10 @@ public:
     void reportPoints();
     void registerDevice();
 
+    int hw_range_x_min;
+    int hw_range_x_max;
+    int hw_range_y_min;
+    int hw_range_y_max;
     int hw_pressure_min;
     int hw_pressure_max;
     QString hw_name;
@@ -103,6 +107,8 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr)
     : q(q_ptr),
       m_lastEventType(-1),
       m_currentSlot(0),
+      hw_range_x_min(0), hw_range_x_max(0),
+      hw_range_y_min(0), hw_range_y_max(0),
       hw_pressure_min(0), hw_pressure_max(0),
       m_device(0), m_typeB(false)
 {
@@ -127,15 +133,17 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
     {
         if (data->code == ABS_MT_POSITION_X)
         {
-            qDebug("    ABS_MT_POSITION_X: %d", data->value + q->m_id * 1280);
-            m_currentData.x = data->value + q->m_id * 1280;
+            qDebug("    ABS_MT_POSITION_X: %d", (qint16) data->value + q->m_id * 1280);
+            m_currentData.x = (qint16) data->value;
+            m_currentData.x = qBound(hw_range_x_min, m_currentData.x, hw_range_x_max) + q->m_id * 1280;
             if (m_typeB)
                 m_contacts[m_currentSlot].x = m_currentData.x;
         }
         else if (data->code == ABS_MT_POSITION_Y)
         {
-            qDebug("    ABS_MT_POSITION_Y: %d", data->value);
-            m_currentData.y = data->value;
+            qDebug("    ABS_MT_POSITION_Y: %d", (qint16) data->value);
+            m_currentData.y = (qint16) data->value;
+            m_currentData.y = qBound(hw_range_y_min, m_currentData.y, hw_range_y_max);
             if (m_typeB)
                 m_contacts[m_currentSlot].y = m_currentData.y;
         }
@@ -174,7 +182,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         }
         else
             qDebug("    unhandled event code: 0x%x %d", data->code, data->value);
-// #define ABS_MT_WIDTH_MAJOR	0x32	/* Major axis of approaching ellipse */ // (touch size?)
+            // #define ABS_MT_WIDTH_MAJOR 0x32 /* Major axis of approaching ellipse */ // (touch size?)
     }
     else if (data->type == EV_KEY && !m_typeB)
     {
@@ -204,6 +212,17 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         while (it.hasNext())
         {
             it.next();
+//            struct TouchPoint {
+//                TouchPoint() : id(0), pressure(0), state(Qt::TouchPointStationary), flags(0) { }
+//                int id;                 // for application use
+//                QPointF normalPosition; // touch device coordinates, (0 to 1, 0 to 1)
+//                QRectF area;            // the touched area, centered at position in screen coordinates
+//                qreal pressure;         // 0 to 1
+//                Qt::TouchPointState state; //Qt::TouchPoint{Pressed|Moved|Stationary|Released}
+//                QVector2D velocity;     // in screen coordinate system, pixels / seconds
+//                QTouchEvent::TouchPoint::InfoFlags flags;
+//                QVector<QPointF> rawPositions; // in screen coordinates
+//            };
             QWindowSystemInterface::TouchPoint tp;
             Contact &contact(it.value());
             tp.id = contact.trackingId;
@@ -258,33 +277,35 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         if (!m_touchPoints.isEmpty() && combinedStates != Qt::TouchPointStationary)
             reportPoints();
     }
+    else
+        qDebug("unhandled case data->type: 0x%x, data->code: 0x%x", data->type, data->code);
 
     m_lastEventType = data->type;
 }
 
 void QEvdevTouchScreenData::reportPoints()
 {
-    QRect winRect;
-    winRect = QGuiApplication::primaryScreen()->geometry();
+//    QRect winRect;
+//    winRect = QGuiApplication::primaryScreen()->geometry();
 
     // Map the coordinates based on the normalized position. QPA expects 'area'
     // to be in screen coordinates.
-    const int pointCount = m_touchPoints.count();
-    for (int i = 0; i < pointCount; ++i)
-    {
-        QWindowSystemInterface::TouchPoint &tp(m_touchPoints[i]);
+//    const int pointCount = m_touchPoints.count();
+//    for (int i = 0; i < pointCount; ++i)
+//    {
+//        QWindowSystemInterface::TouchPoint &tp(m_touchPoints[i]);
 
-        // Generate a screen position that is always inside the active window
-        // or the primary screen.
-        tp.area = QRectF(0, 0, 8, 8);
-        tp.area.moveCenter(QPointF(tp.normalPosition.x(), tp.normalPosition.y()));
+//        // Generate a screen position that is always inside the active window
+//        // or the primary screen.
+//        tp.area = QRectF(0, 0, 8, 8);
+//        tp.area.moveCenter(QPointF(tp.normalPosition.x(), tp.normalPosition.y()));
 
-        // Calculate normalized pressure.
-        if (!hw_pressure_min && !hw_pressure_max)
-            tp.pressure = tp.state == Qt::TouchPointReleased ? 0 : 1;
-        else
-            tp.pressure = (tp.pressure - hw_pressure_min) / qreal(hw_pressure_max - hw_pressure_min);
-    }
+//        // Calculate normalized pressure.
+//        if (!hw_pressure_min && !hw_pressure_max)
+//            tp.pressure = tp.state == Qt::TouchPointReleased ? 0 : 1;
+//        else
+//            tp.pressure = (tp.pressure - hw_pressure_min) / qreal(hw_pressure_max - hw_pressure_min);
+//    }
 
     QWindowSystemInterface::handleTouchEvent(0, m_device, m_touchPoints);
 }
@@ -335,6 +356,16 @@ QEvdevTouchScreenDevice::QEvdevTouchScreenDevice(const QString &dev, int id)
 
     input_absinfo absInfo;
     memset(&absInfo, 0, sizeof(input_absinfo));
+    if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_X), &absInfo) >= 0) {
+        qDebug("min X: %d max X: %d", absInfo.minimum, absInfo.maximum);
+        m_d->hw_range_x_min = absInfo.minimum;
+        m_d->hw_range_x_max = absInfo.maximum;
+    }
+    if (ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_Y), &absInfo) >= 0) {
+        qDebug("min Y: %d max Y: %d", absInfo.minimum, absInfo.maximum);
+        m_d->hw_range_y_min = absInfo.minimum;
+        m_d->hw_range_y_max = absInfo.maximum;
+    }
     if (ioctl(m_fd, EVIOCGABS(ABS_PRESSURE), &absInfo) >= 0) {
         qDebug("min pressure: %d max pressure: %d", absInfo.minimum, absInfo.maximum);
         if (absInfo.maximum > absInfo.minimum) {
