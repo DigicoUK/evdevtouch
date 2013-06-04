@@ -58,15 +58,36 @@ class QEvdevTouchScreenData;
 struct mtdev;
 #endif
 
+class QEvdevTouchScreenEventDispatcher
+{
+public:
+    QEvdevTouchScreenEventDispatcher();
+    void processInputEvent(int screenId, QTouchDevice *m_device, QList<QWindowSystemInterface::TouchPoint> &m_touchPoints);
+
+private:
+    bool isAllDataArrived();
+
+    struct TouchScreen {
+        QList<QWindowSystemInterface::TouchPoint> m_touchPoints;
+        Qt::TouchPointStates m_combinedStates;
+        bool hasTouchingFinger;
+        bool isDataArrived;
+    };
+    QHash<int, TouchScreen> m_touchScreenList;
+    int m_maxScreenId;
+};
+
 class QEvdevTouchScreenDevice : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit QEvdevTouchScreenDevice(const QString &dev, int id);
+    explicit QEvdevTouchScreenDevice(const QString &params, QEvdevTouchScreenEventDispatcher *eventDispatcher, int id);
     ~QEvdevTouchScreenDevice();
 
     int m_id;
+    QEvdevTouchScreenEventDispatcher *m_eventDispatcher;
+    QEvdevTouchScreenData *m_d;
 
 private slots:
     void readData();
@@ -74,7 +95,6 @@ private slots:
 private:
     QSocketNotifier *m_notify;
     int m_fd;
-    QEvdevTouchScreenData *m_d;
     int m_xOffset;
 #ifdef USE_MTDEV
     mtdev *m_mtdev;
@@ -91,6 +111,7 @@ public:
 
 private:
     QList<QEvdevTouchScreenDevice *> m_deviceList;
+    QEvdevTouchScreenEventDispatcher m_eventDispatcher;
 };
 
 class QEvdevTouchScreenHandlerThread : public QThread
