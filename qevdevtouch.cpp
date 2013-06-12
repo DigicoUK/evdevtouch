@@ -87,8 +87,9 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
 
     if(isAllDataArrived())
     {
+        char fingers1[] = "----------";
+        char fingers2[] = "----------";
         QList<QWindowSystemInterface::TouchPoint> allTouchPoints;
-        qDebug("isAllDataArrived() true %d", m_touchScreenList.size());
         for(int i = 0; i <= m_maxScreenId; i++)
         {
             if(m_touchScreenList.contains(i) && m_touchScreenList[i].hasTouchingFinger)
@@ -100,10 +101,31 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
                     m_touchScreenList[i].hasTouchingFinger = false;
             }
         }
-        QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
+        for(int i = 0; i < allTouchPoints.size(); i++)
+        {
+            if(allTouchPoints[i].id >= 10)
+                fingers2[allTouchPoints[i].id - 10] = '*';
+            else
+                fingers1[allTouchPoints[i].id] = '*';
+        }
+//        qDebug("isAllDataArrived() true %d ... %d + %d = %d %s %s", m_touchScreenList.size(),
+//                m_touchScreenList[0].m_touchPoints.size(),
+//                m_touchScreenList[1].m_touchPoints.size(),
+//                allTouchPoints.size(),
+//                fingers1,
+//                fingers2
+//            );
+
+        combinedStates = 0;
+        for(int i = 0; i <= m_maxScreenId; i++)
+        {
+            if(m_touchScreenList.contains(i))
+                combinedStates |= m_touchScreenList[i].m_combinedStates;
+        }
+        if(combinedStates != Qt::TouchPointStationary)
+            QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
     }
-    else
-        qDebug("isAllDataArrived() false");
+//    else qDebug("isAllDataArrived() false");
 
 }
 
@@ -266,7 +288,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
     {
 //        qDebug("data->type == EV_SYN && data->code == SYN_REPORT %d %d", q->m_id, m_contacts.size());
         m_touchPoints.clear();
-        Qt::TouchPointStates combinedStates;
+//        Qt::TouchPointStates combinedStates;
         QMutableHashIterator<int, Contact> it(m_contacts);
         while (it.hasNext())
         {
@@ -313,7 +335,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             }
 
             tp.state = contact.state;
-            combinedStates |= tp.state;
+//            combinedStates |= tp.state;
 
             // Store the HW coordinates for now, will be updated later.
             tp.area = QRectF(0, 0, contact.maj, contact.maj);
@@ -335,7 +357,9 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         if (!m_typeB)
             m_contacts.clear();
 
-        if (!m_touchPoints.isEmpty() && combinedStates != Qt::TouchPointStationary)
+//        if (!m_touchPoints.isEmpty() && combinedStates != Qt::TouchPointStationary)
+//            reportPoints();
+        if (!m_touchPoints.isEmpty())
             reportPoints();
     }
     else
@@ -371,21 +395,19 @@ void QEvdevTouchScreenData::reportPoints()
 //    qDebug("m_id: %d %d %d", q->m_id, m_contacts.size(), m_touchPoints.size());
 //    qDebug() << m_touchPoints;
 
-    int combinedStates = 0;
-    const char *state = "";
-    for(int i = 0; i < m_touchPoints.size(); i++)
-    {
-        combinedStates |= m_touchPoints[i].state;
-    }
-
-    switch(combinedStates)
-    {
-        case Qt::TouchPointPressed:  state = "pressed";  break;
-        case Qt::TouchPointReleased: state = "released"; break;
-    }
-
-    if(state[0])
-        qDebug("combinedStates: %d, 0x%x %s", m_dev->m_id, combinedStates, state);
+//    Qt::TouchPointStates combinedStates = 0;
+//    const char *state = "";
+//    for(int i = 0; i < m_touchPoints.size(); i++)
+//    {
+//        combinedStates |= m_touchPoints[i].state;
+//    }
+//    switch(combinedStates)
+//    {
+//        case Qt::TouchPointPressed:  state = "pressed";  break;
+//        case Qt::TouchPointReleased: state = "released"; break;
+//    }
+//    if(state[0])
+//        qDebug("combinedStates: %d, 0x%x %s", m_dev->m_id, combinedStates, state);
 
 //    m_dev->m_deviceList->at(0)->m_d->
 
