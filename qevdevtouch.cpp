@@ -569,12 +569,17 @@ void QEvdevTouchScreenDevice::readData()
 
 // class QEvdevTouchScreenHandler --------------------------------------------------------------------------------------------------
 
-QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &spec, QObject *parent)
+QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &specification, QObject *parent)
     : QObject(parent)
 {
     setObjectName(QLatin1String("Evdev Touch Handler"));
 
     // only the first device argument is used for now
+    QString spec = QString::fromLocal8Bit(qgetenv("QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS"));
+
+    if (spec.isEmpty())
+        spec = specification;
+
     QStringList args = spec.split(QLatin1Char(':'));
     for(int i = 0; i < args.count(); i++)
     {
@@ -742,7 +747,7 @@ QEvdevTouchScreenDevice::QEvdevTouchScreenDevice(const QString &dev, int id)
 
     if (m_fd >= 0) {
         m_notify = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
-        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData())); // TODO: should we need a destructor for this? (disconnect or something?)
+        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData()));
     } else {
         qErrnoWarning(errno, "Cannot open input device %s", qPrintable(dev));
         return;

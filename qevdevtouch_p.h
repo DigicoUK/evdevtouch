@@ -48,8 +48,6 @@
 #include <QThread>
 #include <qpa/qwindowsysteminterface.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 class QSocketNotifier;
@@ -106,7 +104,7 @@ class QEvdevTouchScreenHandler : public QObject
     Q_OBJECT
 
 public:
-    explicit QEvdevTouchScreenHandler(const QString &spec = QString(), QObject *parent = 0);
+    explicit QEvdevTouchScreenHandler(const QString &specification = QString(), QObject *parent = 0);
     ~QEvdevTouchScreenHandler();
 
 private:
@@ -128,7 +126,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QEVDEVTOUCH_P_H
