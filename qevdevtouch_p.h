@@ -83,7 +83,7 @@ public:
     explicit QEvdevTouchScreenDevice(const QString &params, QEvdevTouchScreenEventDispatcher *eventDispatcher, int id);
     ~QEvdevTouchScreenDevice();
 
-    int m_id;
+    int m_screenId;
     QEvdevTouchScreenEventDispatcher *m_eventDispatcher;
     QEvdevTouchScreenData *m_d;
 

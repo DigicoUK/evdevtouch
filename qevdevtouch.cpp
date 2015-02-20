@@ -58,6 +58,7 @@ extern "C" {
 QT_BEGIN_NAMESPACE
 
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
+
 QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
     : m_maxScreenId(0)
 {
@@ -65,6 +66,7 @@ QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
 
 void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDevice *device, QList<QWindowSystemInterface::TouchPoint> &touchPoints)
 {
+//    qDebug("screenId: %d/%d", screenId, m_maxScreenId);
     m_touchScreenList[screenId].m_touchPoints = touchPoints;
     m_touchScreenList[screenId].isDataArrived = true;
     if(screenId > m_maxScreenId)
@@ -85,10 +87,11 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
 //            QWindowSystemInterface::handleTouchEvent(0, device, m_touchScreenList[i].m_touchPoints);
 //    }
 
-    if(isAllDataArrived())
+//    if(isAllDataArrived())
     {
-        char fingers1[] = "----------";
-        char fingers2[] = "----------";
+//        qDebug("isAllDataArrived() true");
+//        char fingers1[] = "----------";
+//        char fingers2[] = "----------";
         QList<QWindowSystemInterface::TouchPoint> allTouchPoints;
         for(int i = 0; i <= m_maxScreenId; i++)
         {
@@ -101,13 +104,13 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
                     m_touchScreenList[i].hasTouchingFinger = false;
             }
         }
-        for(int i = 0; i < allTouchPoints.size(); i++)
-        {
-            if(allTouchPoints[i].id >= 10)
-                fingers2[allTouchPoints[i].id - 10] = '*';
-            else
-                fingers1[allTouchPoints[i].id] = '*';
-        }
+//        for(int i = 0; i < allTouchPoints.size(); i++)
+//        {
+//            if(allTouchPoints[i].id >= 10)
+//                fingers2[allTouchPoints[i].id - 10] = '*';
+//            else
+//                fingers1[allTouchPoints[i].id] = '*';
+//        }
 //        qDebug("isAllDataArrived() true %d ... %d + %d = %d %s %s", m_touchScreenList.size(),
 //                m_touchScreenList[0].m_touchPoints.size(),
 //                m_touchScreenList[1].m_touchPoints.size(),
@@ -171,6 +174,7 @@ public:
     int findClosestContact(const QHash<int, Contact> &contacts, int x, int y, int *dist);
     void reportPoints();
     void registerDevice();
+    const char *getEventCodeString(int eventType, int eventCode);
 
     int hw_range_x_min;
     int hw_range_x_max;
@@ -182,6 +186,11 @@ public:
     QTouchDevice *m_device;
     bool m_typeB;
     QEvdevTouchScreenEventDispatcher *m_eventDispatcher;
+
+    QHash<int, const char *> eTypes; // event type table, only for debug
+    QHash<int, const char *> absCodes; // absolute event codes table, only for debug
+    QHash<int, const char *> synCodes; // syn event codes table, only for debug
+    QHash<int, const char *> keyCodes; // key event codes table, only for debug
 };
 
 QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr, QEvdevTouchScreenEventDispatcher *eventDispatcher)
@@ -194,7 +203,87 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr, QEv
       m_device(0), m_typeB(false),
       m_eventDispatcher(eventDispatcher)
 {
-    qDebug("QEvdevTouchScreenData() id: %d", m_dev->m_id);
+    qDebug("QEvdevTouchScreenData() id: %d", m_dev->m_screenId);
+
+#if 0
+#define INSERT(list, value) list[value] = #value;
+    // event types
+    INSERT(eTypes, EV_SYN);
+    INSERT(eTypes, EV_KEY);
+    INSERT(eTypes, EV_REL);
+    INSERT(eTypes, EV_ABS);
+    INSERT(eTypes, EV_MSC);
+    INSERT(eTypes, EV_SW);
+    INSERT(eTypes, EV_LED);
+    INSERT(eTypes, EV_SND);
+    INSERT(eTypes, EV_REP);
+    INSERT(eTypes, EV_FF);
+    INSERT(eTypes, EV_PWR);
+    INSERT(eTypes, EV_FF_STATUS);
+
+    INSERT(absCodes, ABS_X		);
+    INSERT(absCodes, ABS_Y		);
+    INSERT(absCodes, ABS_Z		);
+    INSERT(absCodes, ABS_RX		);
+    INSERT(absCodes, ABS_RY		);
+    INSERT(absCodes, ABS_RZ		);
+    INSERT(absCodes, ABS_THROTTLE);
+    INSERT(absCodes, ABS_RUDDER	);
+    INSERT(absCodes, ABS_WHEEL	);
+    INSERT(absCodes, ABS_GAS	);
+    INSERT(absCodes, ABS_BRAKE	);
+    INSERT(absCodes, ABS_HAT0X	);
+    INSERT(absCodes, ABS_HAT0Y	);
+    INSERT(absCodes, ABS_HAT1X	);
+    INSERT(absCodes, ABS_HAT1Y	);
+    INSERT(absCodes, ABS_HAT2X	);
+    INSERT(absCodes, ABS_HAT2Y	);
+    INSERT(absCodes, ABS_HAT3X	);
+    INSERT(absCodes, ABS_HAT3Y	);
+    INSERT(absCodes, ABS_PRESSURE);
+    INSERT(absCodes, ABS_DISTANCE);
+    INSERT(absCodes, ABS_TILT_X	);
+    INSERT(absCodes, ABS_TILT_Y	);
+    INSERT(absCodes, ABS_TOOL_WIDTH);
+    INSERT(absCodes, ABS_VOLUME		);
+    INSERT(absCodes, ABS_MISC		);
+    INSERT(absCodes, ABS_MT_SLOT	);
+    INSERT(absCodes, ABS_MT_TOUCH_MAJOR);
+    INSERT(absCodes, ABS_MT_TOUCH_MINOR);
+    INSERT(absCodes, ABS_MT_WIDTH_MAJOR);
+    INSERT(absCodes, ABS_MT_WIDTH_MINOR);
+    INSERT(absCodes, ABS_MT_ORIENTATION);
+    INSERT(absCodes, ABS_MT_POSITION_X);
+    INSERT(absCodes, ABS_MT_POSITION_Y);
+    INSERT(absCodes, ABS_MT_TOOL_TYPE);
+    INSERT(absCodes, ABS_MT_BLOB_ID	);
+    INSERT(absCodes, ABS_MT_TRACKING_ID);
+    INSERT(absCodes, ABS_MT_PRESSURE);
+    INSERT(absCodes, ABS_MT_DISTANCE);
+    INSERT(absCodes, ABS_MT_TOOL_X	);
+    INSERT(absCodes, ABS_MT_TOOL_Y	);
+
+    INSERT(synCodes, SYN_REPORT		);
+    INSERT(synCodes, SYN_CONFIG		);
+    INSERT(synCodes, SYN_MT_REPORT	);
+    INSERT(synCodes, SYN_DROPPED	);
+
+    INSERT(keyCodes, BTN_TOOL_PEN		);
+    INSERT(keyCodes, BTN_TOOL_RUBBER	);
+    INSERT(keyCodes, BTN_TOOL_BRUSH		);
+    INSERT(keyCodes, BTN_TOOL_PENCIL	);
+    INSERT(keyCodes, BTN_TOOL_AIRBRUSH	);
+    INSERT(keyCodes, BTN_TOOL_FINGER	);
+    INSERT(keyCodes, BTN_TOOL_MOUSE		);
+    INSERT(keyCodes, BTN_TOOL_LENS		);
+    INSERT(keyCodes, BTN_TOOL_QUINTTAP	);
+    INSERT(keyCodes, BTN_TOUCH			);
+    INSERT(keyCodes, BTN_STYLUS			);
+    INSERT(keyCodes, BTN_STYLUS2		);
+    INSERT(keyCodes, BTN_TOOL_DOUBLETAP	);
+    INSERT(keyCodes, BTN_TOOL_TRIPLETAP	);
+    INSERT(keyCodes, BTN_TOOL_QUADTAP	);
+#endif
 }
 
 void QEvdevTouchScreenData::registerDevice()
@@ -209,15 +298,35 @@ void QEvdevTouchScreenData::registerDevice()
     QWindowSystemInterface::registerTouchDevice(m_device);
 }
 
+//const char *QEvdevTouchScreenData::getEventCodeString(int eventType, int eventCode)
+//{
+//    switch(eventType)
+//    {
+//        case EV_ABS: return absCodes.value(eventCode);
+//        case EV_KEY: return keyCodes.value(eventCode);
+//        case EV_SYN: return synCodes.value(eventCode);
+//        default: return "-";
+//    }
+//}
+
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
 {
+//    qDebug("screen%d %02x %s %04x %-20s %08x"
+//           , m_dev->m_screenId
+//           , data->type
+//           , eTypes.value(data->type)
+//           , data->code
+//           , getEventCodeString(data->type, data->code)
+//           , data->value
+//        );
+
     if (data->type == EV_ABS)
     {
         if (data->code == ABS_MT_POSITION_X)
         {
-//            qDebug("    ABS_MT_POSITION_X: %d", (qint16) data->value + q->m_id * 1280);
+//            qDebug("    ABS_MT_POSITION_X: %d", (qint16) data->value + m_dev->m_screenId * 1280);
             m_currentData.x = (qint16) data->value;
-            m_currentData.x = qBound(hw_range_x_min, m_currentData.x, hw_range_x_max) + m_dev->m_id * 1280;
+            m_currentData.x = qBound(hw_range_x_min, m_currentData.x, hw_range_x_max) + m_dev->m_screenId * 1280;
             if (m_typeB)
                 m_contacts[m_currentSlot].x = m_currentData.x;
         }
@@ -231,8 +340,12 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         }
         else if (data->code == ABS_MT_TRACKING_ID)
         {
-//            qDebug("    ABS_MT_TRACKING_ID: %d", data->value + q->m_id * 10);
-            m_currentData.trackingId = data->value + m_dev->m_id * 10; // FIXME: hack for dual (multiple) touch screens. Can we do it nicer?
+//            qDebug("    ABS_MT_TRACKING_ID: %d, %d, %d", data->value, data->value + m_dev->m_screenId * 10, m_currentSlot);
+            if(data->value >= 0)
+                m_currentData.trackingId = data->value + m_dev->m_screenId * 10; // FIXME: hack for dual (multiple) touch screens. Can we do it nicer?
+            else
+                m_currentData.trackingId = data->value;
+
             if (m_typeB)
             {
                 if (m_currentData.trackingId == -1)
@@ -262,7 +375,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //            qDebug("    ABS_MT_SLOT: %d", data->value);
             m_currentSlot = data->value;
         }
-//        else qDebug("    unhandled event code: 0x%x %d", data->code, data->value);
+//        else qDebug("    type %d unhandled event code: 0x%x %d", data->type, data->code, data->value);
             // #define ABS_MT_WIDTH_MAJOR 0x32 /* Major axis of approaching ellipse */ // (touch size?)
     }
     else if (data->type == EV_KEY && !m_typeB)
@@ -286,13 +399,13 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
     }
     else if (data->type == EV_SYN && data->code == SYN_REPORT)
     {
-//        qDebug("data->type == EV_SYN && data->code == SYN_REPORT %d %d", q->m_id, m_contacts.size());
+//        qDebug("data->type == EV_SYN && data->code == SYN_REPORT %d %d", m_dev->m_screenId, m_contacts.size());
         m_touchPoints.clear();
 //        Qt::TouchPointStates combinedStates;
-        QMutableHashIterator<int, Contact> it(m_contacts);
-        while (it.hasNext())
+        QMutableHashIterator<int, Contact> contactsIterator(m_contacts);
+        while (contactsIterator.hasNext())
         {
-            it.next();
+            contactsIterator.next();
 //            struct TouchPoint {
 //                TouchPoint() : id(0), pressure(0), state(Qt::TouchPointStationary), flags(0) { }
 //                int id;                 // for application use
@@ -304,12 +417,15 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //                QTouchEvent::TouchPoint::InfoFlags flags;
 //                QVector<QPointF> rawPositions; // in screen coordinates
 //            };
-            QWindowSystemInterface::TouchPoint tp;
-            Contact &contact(it.value());
-            tp.id = contact.trackingId;
-            tp.flags = contact.flags;
+            QWindowSystemInterface::TouchPoint touchPoint;
+            Contact &contact(contactsIterator.value());
+            touchPoint.id = contact.trackingId;
+//            tp.id = m_typeB ? it.key() : contact.trackingId;
+            touchPoint.flags = contact.flags;
 
-            int key = m_typeB ? it.key() : contact.trackingId;
+//            qDebug("contactsIterator.key(): %d, contact.trackingId: %d, m_currentSlot: %d", contactsIterator.key(), contact.trackingId, m_currentSlot);
+            int key = m_typeB ? contactsIterator.key() : contact.trackingId;
+//            tp.id = key;
             if (m_lastContacts.contains(key))
             {
                 const Contact &prev(m_lastContacts.value(key));
@@ -330,28 +446,28 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             // Avoid reporting a contact in released state more than once.
             if (contact.state == Qt::TouchPointReleased && !m_lastContacts.contains(key))
             {
-                it.remove();
+                contactsIterator.remove();
                 continue;
             }
 
-            tp.state = contact.state;
+            touchPoint.state = contact.state;
 //            combinedStates |= tp.state;
 
             // Store the HW coordinates for now, will be updated later.
-            tp.area = QRectF(0, 0, contact.maj, contact.maj);
-            tp.area.moveCenter(QPoint(contact.x, contact.y));
-            tp.pressure = contact.pressure;
+            touchPoint.area = QRectF(0, 0, contact.maj, contact.maj);
+            touchPoint.area.moveCenter(QPoint(contact.x, contact.y));
+            touchPoint.pressure = contact.pressure;
 
             // Get a normalized position in range 0..1.
-            tp.normalPosition = QPointF(contact.x, contact.y);
+            touchPoint.normalPosition = QPointF(contact.x, contact.y);
 
-            m_touchPoints.append(tp);
+            m_touchPoints.append(touchPoint);
 
             if (contact.state == Qt::TouchPointReleased)
-                it.remove();
+                contactsIterator.remove();
         }
 
-//        qDebug("m_id: %d %d %d", q->m_id, m_contacts.size(), m_touchPoints.size());
+//        qDebug("m_screenid: %d, m_contacts.size(): %d, m_touchPoints.size(): %d", m_dev->m_screenId, m_contacts.size(), m_touchPoints.size());
 
         m_lastContacts = m_contacts;
         if (!m_typeB)
@@ -362,8 +478,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         if (!m_touchPoints.isEmpty())
             reportPoints();
     }
-    else
-        qDebug("unhandled case data->type: 0x%x, data->code: 0x%x", data->type, data->code);
+//    else qDebug("unhandled case data->type: 0x%x, data->code: 0x%x, data->value: 0x%x", data->type, data->code, data->value);
 
     m_lastEventType = data->type;
 }
@@ -392,7 +507,7 @@ void QEvdevTouchScreenData::reportPoints()
 //            tp.pressure = (tp.pressure - hw_pressure_min) / qreal(hw_pressure_max - hw_pressure_min);
 //    }
 
-//    qDebug("m_id: %d %d %d", q->m_id, m_contacts.size(), m_touchPoints.size());
+//    qDebug("m_screenid: %d %d %d", q->m_screenid, m_contacts.size(), m_touchPoints.size());
 //    qDebug() << m_touchPoints;
 
 //    Qt::TouchPointStates combinedStates = 0;
@@ -407,12 +522,12 @@ void QEvdevTouchScreenData::reportPoints()
 //        case Qt::TouchPointReleased: state = "released"; break;
 //    }
 //    if(state[0])
-//        qDebug("combinedStates: %d, 0x%x %s", m_dev->m_id, combinedStates, state);
+//        qDebug("combinedStates: %d, 0x%x %s", m_dev->m_screenid, combinedStates, state);
 
 //    m_dev->m_deviceList->at(0)->m_d->
 
 //    QWindowSystemInterface::handleTouchEvent(0, m_device, m_touchPoints);
-    m_eventDispatcher->processInputEvent(m_dev->m_id, m_device, m_touchPoints);
+    m_eventDispatcher->processInputEvent(m_dev->m_screenId, m_device, m_touchPoints);
 }
 
 // class QEvdevTouchScreenDevice ---------------------------------------------------------------------------------------------------
@@ -426,7 +541,7 @@ static inline bool testBit(long bit, const long *array)
 }
 
 QEvdevTouchScreenDevice::QEvdevTouchScreenDevice(const QString &params, QEvdevTouchScreenEventDispatcher *eventDispatcher, int id)
-    : m_id(id), m_eventDispatcher(eventDispatcher), m_d(0), m_notify(0), m_fd(-1), m_xOffset(-1280 * id)
+    : m_screenId(id), m_eventDispatcher(eventDispatcher), m_d(0), m_notify(0), m_fd(-1), m_xOffset(-1280 * id)
 #ifdef USE_MTDEV
       , m_mtdev(0)
 #endif
