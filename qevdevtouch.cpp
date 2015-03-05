@@ -57,6 +57,8 @@ extern "C" {
 
 QT_BEGIN_NAMESPACE
 
+//#define EVDEBUG 1 // debug the touch events
+
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
 QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
@@ -67,6 +69,7 @@ QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
 void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDevice *device, QList<QWindowSystemInterface::TouchPoint> &touchPoints)
 {
 //    qDebug("screenId: %d/%d", screenId, m_maxScreenId);
+//    qDebug() << touchPoints;
     m_touchScreenList[screenId].m_touchPoints = touchPoints;
     m_touchScreenList[screenId].isDataArrived = true;
     if(screenId > m_maxScreenId)
@@ -125,8 +128,12 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
             if(m_touchScreenList.contains(i))
                 combinedStates |= m_touchScreenList[i].m_combinedStates;
         }
+
         if(combinedStates != Qt::TouchPointStationary)
+        {
+//            qDebug() << allTouchPoints;
             QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
+        }
     }
 //    else qDebug("isAllDataArrived() false");
 
@@ -205,7 +212,7 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr, QEv
 {
     qDebug("QEvdevTouchScreenData() id: %d", m_dev->m_screenId);
 
-#if 0
+#ifdef EVDEBUG
 #define INSERT(list, value) list[value] = #value;
     // event types
     INSERT(eTypes, EV_SYN);
@@ -298,27 +305,31 @@ void QEvdevTouchScreenData::registerDevice()
     QWindowSystemInterface::registerTouchDevice(m_device);
 }
 
-//const char *QEvdevTouchScreenData::getEventCodeString(int eventType, int eventCode)
-//{
-//    switch(eventType)
-//    {
-//        case EV_ABS: return absCodes.value(eventCode);
-//        case EV_KEY: return keyCodes.value(eventCode);
-//        case EV_SYN: return synCodes.value(eventCode);
-//        default: return "-";
-//    }
-//}
+#ifdef EVDEBUG
+const char *QEvdevTouchScreenData::getEventCodeString(int eventType, int eventCode)
+{
+    switch(eventType)
+    {
+        case EV_ABS: return absCodes.value(eventCode);
+        case EV_KEY: return keyCodes.value(eventCode);
+        case EV_SYN: return synCodes.value(eventCode);
+        default: return "-";
+    }
+}
+#endif
 
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
 {
-//    qDebug("screen%d %02x %s %04x %-20s %08x"
-//           , m_dev->m_screenId
-//           , data->type
-//           , eTypes.value(data->type)
-//           , data->code
-//           , getEventCodeString(data->type, data->code)
-//           , data->value
-//        );
+#ifdef EVDEBUG
+    qDebug("screen%d %02x %s %04x %-20s %08x"
+           , m_dev->m_screenId
+           , data->type
+           , eTypes.value(data->type)
+           , data->code
+           , getEventCodeString(data->type, data->code)
+           , data->value
+        );
+#endif
 
     if (data->type == EV_ABS)
     {
