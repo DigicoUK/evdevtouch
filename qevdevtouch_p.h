@@ -60,7 +60,7 @@ class QEvdevTouchScreenEventDispatcher
 {
 public:
     QEvdevTouchScreenEventDispatcher();
-    void processInputEvent(int screenId, QTouchDevice *m_device, QList<QWindowSystemInterface::TouchPoint> &m_touchPoints);
+    void processInputEvent(int screenId, QTouchDevice *m_device, QList<QWindowSystemInterface::TouchPoint> &m_touchPoints, struct timeval time);
 
 private:
     bool isAllDataArrived();
@@ -73,6 +73,9 @@ private:
     };
     QHash<int, TouchScreen> m_touchScreenList;
     int m_maxScreenId;
+    Qt::TouchPointStates m_lastCombinedStates;
+    struct timeval m_eventDelayExpireTime;
+    struct timeval m_eventDelayExpireDelta;
 };
 
 class QEvdevTouchScreenDevice : public QObject

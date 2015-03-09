@@ -62,11 +62,11 @@ QT_BEGIN_NAMESPACE
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
 QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
-    : m_maxScreenId(0)
+    : m_maxScreenId(0), m_lastCombinedStates(0), m_eventDelayExpireTime({0, 0}), m_eventDelayExpireDelta({0, 16666})
 {
 }
 
-void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDevice *device, QList<QWindowSystemInterface::TouchPoint> &touchPoints)
+void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDevice *device, QList<QWindowSystemInterface::TouchPoint> &touchPoints, struct timeval time)
 {
 //    qDebug("screenId: %d/%d", screenId, m_maxScreenId);
 //    qDebug() << touchPoints;
@@ -126,14 +126,27 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
         for(int i = 0; i <= m_maxScreenId; i++)
         {
             if(m_touchScreenList.contains(i))
+            {
                 combinedStates |= m_touchScreenList[i].m_combinedStates;
+                m_touchScreenList[i].m_combinedStates = 0;
+            }
         }
 
         if(combinedStates != Qt::TouchPointStationary)
         {
-//            qDebug() << allTouchPoints;
-            QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
+            if(combinedStates == Qt::TouchPointMoved && m_lastCombinedStates == Qt::TouchPointMoved && timercmp(&time, &m_eventDelayExpireTime, <))
+            {
+                // do nothing, waiting for the next event
+//                qDebug() << "DELAYED!" << allTouchPoints << combinedStates;
+            }
+            else
+            {
+                qDebug() << allTouchPoints << combinedStates;
+                QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
+                timeradd(&time, &m_eventDelayExpireDelta, &m_eventDelayExpireTime);
+            }
         }
+        m_lastCombinedStates = combinedStates;
     }
 //    else qDebug("isAllDataArrived() false");
 
@@ -179,7 +192,7 @@ public:
     int m_currentSlot;
 
     int findClosestContact(const QHash<int, Contact> &contacts, int x, int y, int *dist);
-    void reportPoints();
+    void reportPoints(struct timeval time);
     void registerDevice();
     const char *getEventCodeString(int eventType, int eventCode);
 
@@ -487,14 +500,14 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //        if (!m_touchPoints.isEmpty() && combinedStates != Qt::TouchPointStationary)
 //            reportPoints();
         if (!m_touchPoints.isEmpty())
-            reportPoints();
+            reportPoints(data->time);
     }
 //    else qDebug("unhandled case data->type: 0x%x, data->code: 0x%x, data->value: 0x%x", data->type, data->code, data->value);
 
     m_lastEventType = data->type;
 }
 
-void QEvdevTouchScreenData::reportPoints()
+void QEvdevTouchScreenData::reportPoints(struct timeval time)
 {
 //    QRect winRect;
 //    winRect = QGuiApplication::primaryScreen()->geometry();
@@ -538,7 +551,7 @@ void QEvdevTouchScreenData::reportPoints()
 //    m_dev->m_deviceList->at(0)->m_d->
 
 //    QWindowSystemInterface::handleTouchEvent(0, m_device, m_touchPoints);
-    m_eventDispatcher->processInputEvent(m_dev->m_screenId, m_device, m_touchPoints);
+    m_eventDispatcher->processInputEvent(m_dev->m_screenId, m_device, m_touchPoints, time);
 }
 
 // class QEvdevTouchScreenDevice ---------------------------------------------------------------------------------------------------
