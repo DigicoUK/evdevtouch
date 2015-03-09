@@ -48,13 +48,14 @@
 #include <QThread>
 #include <qpa/qwindowsysteminterface.h>
 
+#if !defined(QT_NO_MTDEV)
+struct mtdev;
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QSocketNotifier;
 class QEvdevTouchScreenData;
-#ifdef USE_MTDEV
-struct mtdev;
-#endif
 
 class QEvdevTouchScreenEventDispatcher
 {
