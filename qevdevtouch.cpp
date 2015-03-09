@@ -48,6 +48,7 @@
 #include <QtCore/private/qcore_unix_p.h>
 #include <QtPlatformSupport/private/qdevicediscovery_p.h>
 #include <linux/input.h>
+#include <QtCore/qmath.h>
 
 #ifdef USE_MTDEV
 extern "C" {
@@ -62,8 +63,12 @@ QT_BEGIN_NAMESPACE
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
 QEvdevTouchScreenEventDispatcher::QEvdevTouchScreenEventDispatcher()
-    : m_maxScreenId(0), m_lastCombinedStates(0), m_eventDelayExpireTime({0, 0}), m_eventDelayExpireDelta({0, 16666})
+    : m_maxScreenId(0), m_lastCombinedStates(0), m_eventDelayExpireTime({0, 0})
 {
+    qreal throttleDelay = qgetenv("QT_QPA_EVDEV_THROTTLE_DELAY").toFloat();
+    m_eventDelayExpireDelta.tv_sec = qFloor(throttleDelay);
+    m_eventDelayExpireDelta.tv_usec = (throttleDelay - m_eventDelayExpireDelta.tv_sec) * 1000000;
+    qDebug() << "QT_QPA_EVDEV_THROTTLE_DELAY" << qgetenv("QT_QPA_EVDEV_THROTTLE_DELAY") << m_eventDelayExpireDelta.tv_sec << m_eventDelayExpireDelta.tv_usec;
 }
 
 void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDevice *device, QList<QWindowSystemInterface::TouchPoint> &touchPoints, struct timeval time)
@@ -137,11 +142,15 @@ void QEvdevTouchScreenEventDispatcher::processInputEvent(int screenId, QTouchDev
             if(combinedStates == Qt::TouchPointMoved && m_lastCombinedStates == Qt::TouchPointMoved && timercmp(&time, &m_eventDelayExpireTime, <))
             {
                 // do nothing, waiting for the next event
-//                qDebug() << "DELAYED!" << allTouchPoints << combinedStates;
+#ifdef EVDEBUG
+                qDebug() << "DELAYED!" << allTouchPoints << combinedStates;
+#endif
             }
             else
             {
+#ifdef EVDEBUG
                 qDebug() << allTouchPoints << combinedStates;
+#endif
                 QWindowSystemInterface::handleTouchEvent(0, device, allTouchPoints);
                 timeradd(&time, &m_eventDelayExpireDelta, &m_eventDelayExpireTime);
             }
