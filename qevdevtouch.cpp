@@ -58,7 +58,7 @@ extern "C" {
 
 QT_BEGIN_NAMESPACE
 
-//#define EVDEBUG 1 // debug the touch events
+#define EVDEBUG 1 // debug the touch events
 
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
@@ -193,7 +193,7 @@ public:
         QTouchEvent::TouchPoint::InfoFlags flags;
         Contact() : trackingId(-1),
             x(0), y(0), maj(-1), pressure(0),
-            state(Qt::TouchPointPressed), flags(0) { }
+            state(static_cast<Qt::TouchPointState>(0)), flags(0) { }
     };
     QHash<int, Contact> m_contacts; // The key is a tracking id for type A, slot number for type B.
     QHash<int, Contact> m_lastContacts;
@@ -289,13 +289,13 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr, QEv
     INSERT(absCodes, ABS_MT_TRACKING_ID);
     INSERT(absCodes, ABS_MT_PRESSURE);
     INSERT(absCodes, ABS_MT_DISTANCE);
-    INSERT(absCodes, ABS_MT_TOOL_X	);
-    INSERT(absCodes, ABS_MT_TOOL_Y	);
+    // INSERT(absCodes, ABS_MT_TOOL_X	);
+    // INSERT(absCodes, ABS_MT_TOOL_Y	);
 
     INSERT(synCodes, SYN_REPORT		);
     INSERT(synCodes, SYN_CONFIG		);
     INSERT(synCodes, SYN_MT_REPORT	);
-    INSERT(synCodes, SYN_DROPPED	);
+    // INSERT(synCodes, SYN_DROPPED	);
 
     INSERT(keyCodes, BTN_TOOL_PEN		);
     INSERT(keyCodes, BTN_TOOL_RUBBER	);
@@ -305,7 +305,7 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenDevice *q_ptr, QEv
     INSERT(keyCodes, BTN_TOOL_FINGER	);
     INSERT(keyCodes, BTN_TOOL_MOUSE		);
     INSERT(keyCodes, BTN_TOOL_LENS		);
-    INSERT(keyCodes, BTN_TOOL_QUINTTAP	);
+    // INSERT(keyCodes, BTN_TOOL_QUINTTAP	);
     INSERT(keyCodes, BTN_TOUCH			);
     INSERT(keyCodes, BTN_STYLUS			);
     INSERT(keyCodes, BTN_STYLUS2		);
@@ -353,6 +353,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         );
 #endif
 
+// Qt::TouchPointPressed
+
     if (data->type == EV_ABS)
     {
         if (data->code == ABS_MT_POSITION_X)
@@ -375,7 +377,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         {
 //            qDebug("    ABS_MT_TRACKING_ID: %d, %d, %d", data->value, data->value + m_dev->m_screenId * 10, m_currentSlot);
             if(data->value >= 0)
-                m_currentData.trackingId = data->value + m_dev->m_screenId * 10; // FIXME: hack for dual (multiple) touch screens. Can we do it nicer?
+                // m_currentData.trackingId = data->value + m_dev->m_screenId * 10; // FIXME: hack for dual (multiple) touch screens. Can we do it nicer?
+                m_currentData.trackingId = (data->value << 2) + m_dev->m_screenId; // maybe a bit nicer
             else
                 m_currentData.trackingId = data->value;
 
@@ -384,7 +387,10 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 if (m_currentData.trackingId == -1)
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 else
+				{
                     m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
+                    m_contacts[m_currentSlot].state = Qt::TouchPointPressed;
+				}
             }
         }
         else if (data->code == ABS_MT_TOUCH_MAJOR)
@@ -411,11 +417,24 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //        else qDebug("    type %d unhandled event code: 0x%x %d", data->type, data->code, data->value);
             // #define ABS_MT_WIDTH_MAJOR 0x32 /* Major axis of approaching ellipse */ // (touch size?)
     }
-    else if (data->type == EV_KEY && !m_typeB)
+    else if (data->type == EV_KEY)
     {
 //        qDebug("EV_KEY && !m_typeB: %d", data->value);
-        if (data->code == BTN_TOUCH && data->value == 0)
-            m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
+        if(!m_typeB)
+        {
+            if(data->code == BTN_TOUCH && data->value == 0)
+                m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
+        }
+        // else
+		// {
+            // if(data->code == BTN_TOUCH)
+			// {
+				// if(data->value == 0)
+					// m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
+				// else
+					// m_contacts[m_currentSlot].state = Qt::TouchPointPressed;
+			// }
+		// }
     }
     else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN)
     {
@@ -426,13 +445,14 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         if (key == -1)
             key = m_contacts.count();
 
-        m_contacts.insert(key, m_currentData);
+        if(!m_typeB)
+            m_contacts.insert(key, m_currentData);
         m_currentData = Contact();
 
     }
     else if (data->type == EV_SYN && data->code == SYN_REPORT)
     {
-//        qDebug("data->type == EV_SYN && data->code == SYN_REPORT %d %d", m_dev->m_screenId, m_contacts.size());
+        qDebug("data->type == EV_SYN && data->code == SYN_REPORT %d %d", m_dev->m_screenId, m_contacts.size());
         m_touchPoints.clear();
 //        Qt::TouchPointStates combinedStates;
         QMutableHashIterator<int, Contact> contactsIterator(m_contacts);
@@ -452,6 +472,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //            };
             QWindowSystemInterface::TouchPoint touchPoint;
             Contact &contact(contactsIterator.value());
+            if (!contact.state)
+                continue;
             touchPoint.id = contact.trackingId;
 //            tp.id = m_typeB ? it.key() : contact.trackingId;
             touchPoint.flags = contact.flags;
@@ -459,7 +481,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //            qDebug("contactsIterator.key(): %d, contact.trackingId: %d, m_currentSlot: %d", contactsIterator.key(), contact.trackingId, m_currentSlot);
             int key = m_typeB ? contactsIterator.key() : contact.trackingId;
 //            tp.id = key;
-            if (m_lastContacts.contains(key))
+            if (!m_typeB && m_lastContacts.contains(key))
             {
                 const Contact &prev(m_lastContacts.value(key));
                 if (contact.state == Qt::TouchPointReleased)
@@ -477,7 +499,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             }
 
             // Avoid reporting a contact in released state more than once.
-            if (contact.state == Qt::TouchPointReleased && !m_lastContacts.contains(key))
+            if (!m_typeB && contact.state == Qt::TouchPointReleased && !m_lastContacts.contains(key))
             {
                 contactsIterator.remove();
                 continue;
@@ -497,7 +519,12 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             m_touchPoints.append(touchPoint);
 
             if (contact.state == Qt::TouchPointReleased)
-                contactsIterator.remove();
+            {
+                if(m_typeB)
+                    contact.state = static_cast<Qt::TouchPointState>(0);
+                else
+                    contactsIterator.remove();
+            }
         }
 
 //        qDebug("m_screenid: %d, m_contacts.size(): %d, m_touchPoints.size(): %d", m_dev->m_screenId, m_contacts.size(), m_touchPoints.size());
