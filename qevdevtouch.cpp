@@ -353,8 +353,6 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         );
 #endif
 
-// Qt::TouchPointPressed
-
     if (data->type == EV_ABS)
     {
         if (data->code == ABS_MT_POSITION_X)
