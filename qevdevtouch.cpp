@@ -495,7 +495,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 }
                 else
                 {
-					if(contact.state != Qt::TouchPointPressed)
+					if(contact.state != Qt::TouchPointPressed || prev.state == Qt::TouchPointPressed)
 						contact.state = (prev.x == contact.x && prev.y == contact.y)
 								? Qt::TouchPointStationary : Qt::TouchPointMoved;
 				}
