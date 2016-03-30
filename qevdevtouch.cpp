@@ -58,7 +58,7 @@ extern "C" {
 
 QT_BEGIN_NAMESPACE
 
-#define EVDEBUG 1 // debug the touch events
+// #define EVDEBUG 1 // debug the touch events
 
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
