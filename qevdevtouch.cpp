@@ -58,7 +58,7 @@ extern "C" {
 
 QT_BEGIN_NAMESPACE
 
-// #define EVDEBUG 1 // debug the touch events
+//#define EVDEBUG 1 // debug the touch events
 
 // class QEvdevTouchScreenEventDispatcher -----------------------------------------------------------------------------------------------------
 
@@ -385,10 +385,10 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 if (m_currentData.trackingId == -1)
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 else
-				{
+                {
                     m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
                     m_contacts[m_currentSlot].state = Qt::TouchPointPressed;
-				}
+                }
             }
         }
         else if (data->code == ABS_MT_TOUCH_MAJOR)
@@ -415,24 +415,11 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //        else qDebug("    type %d unhandled event code: 0x%x %d", data->type, data->code, data->value);
             // #define ABS_MT_WIDTH_MAJOR 0x32 /* Major axis of approaching ellipse */ // (touch size?)
     }
-    else if (data->type == EV_KEY)
+    else if (data->type == EV_KEY && !m_typeB)
     {
 //        qDebug("EV_KEY && !m_typeB: %d", data->value);
-        if(!m_typeB)
-        {
-            if(data->code == BTN_TOUCH && data->value == 0)
-                m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
-        }
-        // else
-		// {
-            // if(data->code == BTN_TOUCH)
-			// {
-				// if(data->value == 0)
-					// m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
-				// else
-					// m_contacts[m_currentSlot].state = Qt::TouchPointPressed;
-			// }
-		// }
+        if (data->code == BTN_TOUCH && data->value == 0)
+            m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
     }
     else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN)
     {
@@ -476,7 +463,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 //            tp.id = m_typeB ? it.key() : contact.trackingId;
             touchPoint.flags = contact.flags;
 
-//           qDebug("key: %d, trackingId: %d, state: %d", contactsIterator.key(), contact.trackingId, contact.state);
+//            qDebug("key: %d, trackingId: %d, state: %d", contactsIterator.key(), contact.trackingId, contact.state);
             int key = m_typeB ? contactsIterator.key() : contact.trackingId;
 //            tp.id = key;
             // if (!m_typeB && m_lastContacts.contains(key))
@@ -485,20 +472,20 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 const Contact &prev(m_lastContacts.value(key));
                 if (contact.state == Qt::TouchPointReleased)
                 {
-					if(!m_typeB)
-					{
-						// Copy over the previous values for released points, just in case.
-						contact.x = prev.x;
-						contact.y = prev.y;
-						contact.maj = prev.maj;
-					}
+                    if(!m_typeB)
+                    {
+                        // Copy over the previous values for released points, just in case.
+                        contact.x = prev.x;
+                        contact.y = prev.y;
+                        contact.maj = prev.maj;
+                    }
                 }
                 else
                 {
-					if(contact.state != Qt::TouchPointPressed || prev.state == Qt::TouchPointPressed)
-						contact.state = (prev.x == contact.x && prev.y == contact.y)
-								? Qt::TouchPointStationary : Qt::TouchPointMoved;
-				}
+                    if(contact.state != Qt::TouchPointPressed || prev.state == Qt::TouchPointPressed)
+                        contact.state = (prev.x == contact.x && prev.y == contact.y)
+                                ? Qt::TouchPointStationary : Qt::TouchPointMoved;
+                }
             }
 
             // Avoid reporting a contact in released state more than once.
@@ -538,7 +525,6 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 
 //        if (!m_touchPoints.isEmpty() && combinedStates != Qt::TouchPointStationary)
 //            reportPoints();
-//		qDebug("m_touchPoints.length(): %d", m_touchPoints.length());
         if (!m_touchPoints.isEmpty())
             reportPoints(data->time);
     }
