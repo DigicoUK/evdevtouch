@@ -283,6 +283,9 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
                 d->hw_range_x_min, d->hw_range_x_max, d->hw_range_y_min, d->hw_range_y_max);
     }
 
+    d->hw_range_x_max = 1280;
+    d->hw_range_y_max = 800;
+
     bool grabSuccess = !ioctl(m_fd, EVIOCGRAB, (void *) 1);
     if (grabSuccess)
         ioctl(m_fd, EVIOCGRAB, (void *) 0);
@@ -621,8 +624,10 @@ void QEvdevTouchScreenData::reportPoints()
         // Generate a screen position that is always inside the active window
         // or the primary screen.  Even though we report this as a QRectF, internally
         // Qt uses QRect/QPoint so we need to bound the size to winRect.size() - QSize(1, 1)
-        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
-        const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
+//        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
+//        const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
+        const qreal wx = tp.normalPosition.x() * 1279;
+        const qreal wy = tp.normalPosition.y() * 799;
         const qreal sizeRatio = (winRect.width() + winRect.height()) / qreal(hw_w + hw_h);
         if (tp.area.width() == -1) // touch major was not provided
             tp.area = QRectF(0, 0, 8, 8);
