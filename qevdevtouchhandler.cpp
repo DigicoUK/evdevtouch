@@ -80,6 +80,7 @@ class QEvdevTouchScreenData
 {
 public:
     QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args);
+    QEvdevTouchScreenData();
 
     void processInputEvent(input_event *data);
     void assignIds();
@@ -134,6 +135,18 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, co
       m_device(0), m_typeB(false), m_singleTouch(false)
 {
     m_forceToActiveWindow = args.contains(QLatin1String("force_window"));
+}
+
+QEvdevTouchScreenData::QEvdevTouchScreenData()
+    : q(0),
+      m_lastEventType(-1),
+      m_currentSlot(0),
+      hw_range_x_min(0), hw_range_x_max(0),
+      hw_range_y_min(0), hw_range_y_max(0),
+      hw_pressure_min(0), hw_pressure_max(0),
+      m_device(0), m_typeB(false), m_singleTouch(false)
+{
+    m_forceToActiveWindow = false;
 }
 
 void QEvdevTouchScreenData::registerDevice()
@@ -666,5 +679,104 @@ void QEvdevTouchScreenHandlerThread::run()
     m_handler = 0;
 }
 
+QEvDevLinkedTouchHandler::QEvDevLinkedTouchHandler(const QString &deviceNode, int tsID)
+{
+    m_deviceNode = deviceNode;
+    m_tsID = tsID;
+    qDebug() << "Adding device at" << m_deviceNode << m_tsID;
+
+    m_fd = QT_OPEN(m_deviceNode.toLocal8Bit().constData(), O_RDONLY | O_NDELAY, 0);
+
+    if (m_fd < 0) {
+        qErrnoWarning(errno, "evdevtouch: Cannot open input device %s", qPrintable(m_deviceNode));
+        return;
+    }
+}
+
+QEvDevLinkedTouchHandler::~QEvDevLinkedTouchHandler()
+{
+    qDebug() << "Removing device" << m_deviceNode;
+    if (m_fd >= 0)
+        QT_CLOSE(m_fd);
+}
+
+int QEvDevLinkedTouchHandler::readData(::input_event *buffer, int sizeof_buffer)
+{
+//    ::input_event buffer[32];
+    int events = 0;
+
+    int n = 0;
+    for (; ;) {
+        events = QT_READ(m_fd, reinterpret_cast<char*>(buffer) + n, sizeof_buffer - n);
+        if (events <= 0)
+            goto err;
+        n += events;
+        if (n % sizeof(::input_event) == 0)
+            break;
+    }
+
+//    n /= sizeof(::input_event);
+//    for (int i = 0; i < n; ++i)
+//        d->processInputEvent(&buffer[i]);
+
+    return events;
+
+err:
+    if (!events) {
+        qWarning("evdevtouch: Got EOF from input device");
+        return -1;
+    } else if (events < 0) {
+        if (errno != EINTR && errno != EAGAIN) {
+            qErrnoWarning(errno, "evdevtouch: Could not read from input device");
+            if (errno == ENODEV) { // device got disconnected -> stop reading
+//                delete m_notify;
+//                m_notify = 0;
+                QT_CLOSE(m_fd);
+                m_fd = -1;
+            }
+            return -1;
+        }
+    }
+    return 0;
+}
+
+QEvDevLinkedTouchHandlerThread::QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *activeLinkedDevices)
+{
+    qDebug() << "thread construct";
+    m_activeLinkedDevices = activeLinkedDevices;
+    d = new QEvdevTouchScreenData();
+    d->m_typeB = true;
+    d->m_singleTouch = false;
+    d->hw_range_x_max = 1280;
+    d->hw_range_y_max = 800;
+    d->registerDevice();
+}
+
+void QEvDevLinkedTouchHandlerThread::run()
+{
+    ::input_event buffer[32];
+//    unsigned long *intBuffer = (unsigned long *) buffer;
+    unsigned int events = 0;
+
+    while(true)
+    {
+//        qDebug() << "thread run";
+        foreach(QEvDevLinkedTouchHandler *linkedTouchHandler, *m_activeLinkedDevices)
+        {
+            while((events = linkedTouchHandler->readData(buffer, sizeof(buffer))))
+            {
+//                qDebug() << "device" << linkedTouchHandler->m_deviceNode << events / sizeof(::input_event);
+//                qDebug("buffer: %p", buffer);
+//                for(unsigned int i = 0; i < events / sizeof(::input_event); i++)
+//                    qDebug("%08lx %08lx %08lx %08lx", intBuffer[i * 4 + 0], intBuffer[i * 4 + 1], intBuffer[i * 4 + 2], intBuffer[i * 4 + 3]);
+                for(unsigned int i = 0; i < events / sizeof(::input_event); i++)
+//                    d->processInputEvent(&buffer[i]);
+                    d->processInputEvent(buffer + i);
+            }
+//            qDebug() << "device" << linkedTouchHandler->m_deviceNode << events;
+        }
+        msleep(10);
+    }
+}
 
 QT_END_NAMESPACE

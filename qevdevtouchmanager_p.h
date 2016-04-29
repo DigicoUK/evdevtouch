@@ -55,37 +55,8 @@ QT_BEGIN_NAMESPACE
 
 class QDeviceDiscovery;
 class QEvdevTouchScreenHandlerThread;
-class QEvdevTouchScreenData;
-
-class QEvDevLinkedTouchHandler
-{
-public:
-    QEvDevLinkedTouchHandler(const QString &, int);
-    ~QEvDevLinkedTouchHandler();
-    int readData(::input_event *buffer, int sizeof_buffer);
-
-    int m_tsID;
-    int m_fd;
-    QString m_deviceNode;
-
-private:
-};
-
-class QEvDevLinkedTouchHandlerThread : public QThread
-{
-public:
-    explicit QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *);
-//    ~QEvDevLinkedTouchHandlerThread();
-    void run() Q_DECL_OVERRIDE;
-//    QEvdevTouchScreenHandler *handler() { return m_handler; }
-
-private:
-//    QString m_device;
-//    QString m_spec;
-//    QEvdevTouchScreenHandler *m_handler;
-    QHash<QString, QEvDevLinkedTouchHandler *> *m_activeLinkedDevices;
-    QEvdevTouchScreenData *d;
-};
+class QEvDevLinkedTouchHandler;
+class QEvDevLinkedTouchHandlerThread;
 
 class QEvdevTouchManager : public QObject
 {
