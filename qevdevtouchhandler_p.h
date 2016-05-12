@@ -56,6 +56,8 @@
 struct mtdev;
 #endif
 
+#define EVDEBUG 1
+
 QT_BEGIN_NAMESPACE
 
 class QSocketNotifier;
@@ -115,6 +117,7 @@ public:
     explicit QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *);
 //    ~QEvDevLinkedTouchHandlerThread();
     void run() Q_DECL_OVERRIDE;
+    input_event *prepareEvent(input_event *e, int tsID);
 //    QEvdevTouchScreenHandler *handler() { return m_handler; }
 
 private:
@@ -123,6 +126,14 @@ private:
 //    QEvdevTouchScreenHandler *m_handler;
     QHash<QString, QEvDevLinkedTouchHandler *> *m_activeLinkedDevices;
     QEvdevTouchScreenData *d;
+
+#ifdef EVDEBUG
+    const char *getEventCodeString(int eventType, int eventCode);
+    QHash<int, const char *> eTypes; // event type table, only for debug
+    QHash<int, const char *> absCodes; // absolute event codes table, only for debug
+    QHash<int, const char *> synCodes; // syn event codes table, only for debug
+    QHash<int, const char *> keyCodes; // key event codes table, only for debug
+#endif
 };
 
 QT_END_NAMESPACE

@@ -637,10 +637,10 @@ void QEvdevTouchScreenData::reportPoints()
         // Generate a screen position that is always inside the active window
         // or the primary screen.  Even though we report this as a QRectF, internally
         // Qt uses QRect/QPoint so we need to bound the size to winRect.size() - QSize(1, 1)
-//        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
-//        const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
-        const qreal wx = tp.normalPosition.x() * 1279;
-        const qreal wy = tp.normalPosition.y() * 799;
+        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
+        const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
+//        const qreal wx = tp.normalPosition.x() * 1279;
+//        const qreal wy = tp.normalPosition.y() * 799;
         const qreal sizeRatio = (winRect.width() + winRect.height()) / qreal(hw_w + hw_h);
         if (tp.area.width() == -1) // touch major was not provided
             tp.area = QRectF(0, 0, 8, 8);
@@ -747,9 +747,140 @@ QEvDevLinkedTouchHandlerThread::QEvDevLinkedTouchHandlerThread(QHash<QString, QE
     d = new QEvdevTouchScreenData();
     d->m_typeB = true;
     d->m_singleTouch = false;
-    d->hw_range_x_max = 1280;
+    d->hw_range_x_max = 1280 * 3;
     d->hw_range_y_max = 800;
     d->registerDevice();
+
+#ifdef EVDEBUG
+#define INSERT(list, value) list[value] = #value;
+    // event types
+    INSERT(eTypes, EV_SYN);
+    INSERT(eTypes, EV_KEY);
+    INSERT(eTypes, EV_REL);
+    INSERT(eTypes, EV_ABS);
+    INSERT(eTypes, EV_MSC);
+    INSERT(eTypes, EV_SW);
+    INSERT(eTypes, EV_LED);
+    INSERT(eTypes, EV_SND);
+    INSERT(eTypes, EV_REP);
+    INSERT(eTypes, EV_FF);
+    INSERT(eTypes, EV_PWR);
+    INSERT(eTypes, EV_FF_STATUS);
+
+    INSERT(absCodes, ABS_X		);
+    INSERT(absCodes, ABS_Y		);
+    INSERT(absCodes, ABS_Z		);
+    INSERT(absCodes, ABS_RX		);
+    INSERT(absCodes, ABS_RY		);
+    INSERT(absCodes, ABS_RZ		);
+    INSERT(absCodes, ABS_THROTTLE);
+    INSERT(absCodes, ABS_RUDDER	);
+    INSERT(absCodes, ABS_WHEEL	);
+    INSERT(absCodes, ABS_GAS	);
+    INSERT(absCodes, ABS_BRAKE	);
+    INSERT(absCodes, ABS_HAT0X	);
+    INSERT(absCodes, ABS_HAT0Y	);
+    INSERT(absCodes, ABS_HAT1X	);
+    INSERT(absCodes, ABS_HAT1Y	);
+    INSERT(absCodes, ABS_HAT2X	);
+    INSERT(absCodes, ABS_HAT2Y	);
+    INSERT(absCodes, ABS_HAT3X	);
+    INSERT(absCodes, ABS_HAT3Y	);
+    INSERT(absCodes, ABS_PRESSURE);
+    INSERT(absCodes, ABS_DISTANCE);
+    INSERT(absCodes, ABS_TILT_X	);
+    INSERT(absCodes, ABS_TILT_Y	);
+    INSERT(absCodes, ABS_TOOL_WIDTH);
+    INSERT(absCodes, ABS_VOLUME		);
+    INSERT(absCodes, ABS_MISC		);
+    INSERT(absCodes, ABS_MT_SLOT	);
+    INSERT(absCodes, ABS_MT_TOUCH_MAJOR);
+    INSERT(absCodes, ABS_MT_TOUCH_MINOR);
+    INSERT(absCodes, ABS_MT_WIDTH_MAJOR);
+    INSERT(absCodes, ABS_MT_WIDTH_MINOR);
+    INSERT(absCodes, ABS_MT_ORIENTATION);
+    INSERT(absCodes, ABS_MT_POSITION_X);
+    INSERT(absCodes, ABS_MT_POSITION_Y);
+    INSERT(absCodes, ABS_MT_TOOL_TYPE);
+    INSERT(absCodes, ABS_MT_BLOB_ID	);
+    INSERT(absCodes, ABS_MT_TRACKING_ID);
+    INSERT(absCodes, ABS_MT_PRESSURE);
+    INSERT(absCodes, ABS_MT_DISTANCE);
+    // INSERT(absCodes, ABS_MT_TOOL_X	);
+    // INSERT(absCodes, ABS_MT_TOOL_Y	);
+
+    INSERT(synCodes, SYN_REPORT		);
+    INSERT(synCodes, SYN_CONFIG		);
+    INSERT(synCodes, SYN_MT_REPORT	);
+    // INSERT(synCodes, SYN_DROPPED	);
+
+    INSERT(keyCodes, BTN_TOOL_PEN		);
+    INSERT(keyCodes, BTN_TOOL_RUBBER	);
+    INSERT(keyCodes, BTN_TOOL_BRUSH		);
+    INSERT(keyCodes, BTN_TOOL_PENCIL	);
+    INSERT(keyCodes, BTN_TOOL_AIRBRUSH	);
+    INSERT(keyCodes, BTN_TOOL_FINGER	);
+    INSERT(keyCodes, BTN_TOOL_MOUSE		);
+    INSERT(keyCodes, BTN_TOOL_LENS		);
+    // INSERT(keyCodes, BTN_TOOL_QUINTTAP	);
+    INSERT(keyCodes, BTN_TOUCH			);
+    INSERT(keyCodes, BTN_STYLUS			);
+    INSERT(keyCodes, BTN_STYLUS2		);
+    INSERT(keyCodes, BTN_TOOL_DOUBLETAP	);
+    INSERT(keyCodes, BTN_TOOL_TRIPLETAP	);
+    INSERT(keyCodes, BTN_TOOL_QUADTAP	);
+#endif
+}
+
+#ifdef EVDEBUG
+const char *QEvDevLinkedTouchHandlerThread::getEventCodeString(int eventType, int eventCode)
+{
+    switch(eventType)
+    {
+        case EV_ABS: return absCodes.value(eventCode);
+        case EV_KEY: return keyCodes.value(eventCode);
+        case EV_SYN: return synCodes.value(eventCode);
+        default: return "-";
+    }
+}
+#endif
+
+input_event *QEvDevLinkedTouchHandlerThread::prepareEvent(input_event *e, int tsID)
+{
+#ifdef EVDEBUG
+    qDebug("%04ld.%06ld screen%d %02x %s %04x %-20s %08x"
+           , e->time.tv_sec % 10000
+           , e->time.tv_usec
+           , tsID
+           , e->type
+           , eTypes.value(e->type)
+           , e->code
+           , getEventCodeString(e->type, e->code)
+           , e->value
+        );
+#endif
+    //    qDebug() << tsID << e->time.tv_sec << e->time.tv_usec << e->type << e->code << e->value;
+    if(e->type == EV_ABS)
+    {
+        if(e->code == ABS_MT_POSITION_X)
+        {
+            e->value += 1280 * tsID;
+        }
+        else if(e->code == ABS_MT_TRACKING_ID)
+        {
+            if(e->value != -1)
+            {
+                e->value = (e->value << 2) + tsID;
+//                qDebug("ABS_MT_TRACKING_ID: %d", e->value);
+            }
+        }
+        else if(e->code == ABS_MT_SLOT)
+        {
+            e->value = (e->value << 2) + tsID;
+//            qDebug("ABS_MT_SLOT: %d", e->value);
+        }
+    }
+    return e;
 }
 
 void QEvDevLinkedTouchHandlerThread::run()
@@ -771,7 +902,7 @@ void QEvDevLinkedTouchHandlerThread::run()
 //                    qDebug("%08lx %08lx %08lx %08lx", intBuffer[i * 4 + 0], intBuffer[i * 4 + 1], intBuffer[i * 4 + 2], intBuffer[i * 4 + 3]);
                 for(unsigned int i = 0; i < events / sizeof(::input_event); i++)
 //                    d->processInputEvent(&buffer[i]);
-                    d->processInputEvent(buffer + i);
+                    d->processInputEvent(prepareEvent(buffer + i, linkedTouchHandler->m_tsID));
             }
 //            qDebug() << "device" << linkedTouchHandler->m_deviceNode << events;
         }
