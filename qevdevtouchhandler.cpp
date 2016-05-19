@@ -681,9 +681,13 @@ void QEvdevTouchScreenHandlerThread::run()
 
 QEvDevLinkedTouchHandler::QEvDevLinkedTouchHandler(const QString &deviceNode, int tsID)
 {
+    //    qDebug() << "Adding device at" << m_deviceNode << m_tsID;
+
     m_deviceNode = deviceNode;
     m_tsID = tsID;
-    qDebug() << "Adding device at" << m_deviceNode << m_tsID;
+    m_lastEvent.type = EV_ABS;
+    m_lastEvent.code = ABS_MT_SLOT;
+    m_lastEvent.value = tsID;
 
     m_fd = QT_OPEN(m_deviceNode.toLocal8Bit().constData(), O_RDONLY | O_NDELAY, 0);
 
@@ -845,13 +849,37 @@ const char *QEvDevLinkedTouchHandlerThread::getEventCodeString(int eventType, in
 }
 #endif
 
-input_event *QEvDevLinkedTouchHandlerThread::prepareEvent(input_event *e, int tsID)
+input_event *QEvDevLinkedTouchHandlerThread::prepareEvent(QEvDevLinkedTouchHandler *linkedTouchHandler, input_event *e)
 {
+//    qDebug() << tsID << e->time.tv_sec << e->time.tv_usec << e->type << e->code << e->value;
+//    qDebug("%08lx %08lx %04x %04x %08x", e->time.tv_sec, e->time.tv_usec, e->type, e->code, e->value);
+    if(e->type == EV_ABS)
+    {
+        if(e->code == ABS_MT_POSITION_X)
+        {
+            e->value += 1280 * linkedTouchHandler->m_tsID;
+        }
+        else if(e->code == ABS_MT_TRACKING_ID)
+        {
+            if(e->value != -1)
+            {
+                e->value = (e->value << 2) + linkedTouchHandler->m_tsID;
+//                qDebug("ABS_MT_TRACKING_ID: %d", e->value);
+            }
+        }
+        else if(e->code == ABS_MT_SLOT)
+        {
+            e->value = (e->value << 2) + linkedTouchHandler->m_tsID;
+//            qDebug("ABS_MT_SLOT: %d", e->value);
+            linkedTouchHandler->m_lastEvent = *e;
+        }
+    }
+
 #ifdef EVDEBUG
     qDebug("%04ld.%06ld screen%d %02x %s %04x %-20s %08x"
            , e->time.tv_sec % 10000
            , e->time.tv_usec
-           , tsID
+           , linkedTouchHandler->m_tsID
            , e->type
            , eTypes.value(e->type)
            , e->code
@@ -859,27 +887,7 @@ input_event *QEvDevLinkedTouchHandlerThread::prepareEvent(input_event *e, int ts
            , e->value
         );
 #endif
-    //    qDebug() << tsID << e->time.tv_sec << e->time.tv_usec << e->type << e->code << e->value;
-    if(e->type == EV_ABS)
-    {
-        if(e->code == ABS_MT_POSITION_X)
-        {
-            e->value += 1280 * tsID;
-        }
-        else if(e->code == ABS_MT_TRACKING_ID)
-        {
-            if(e->value != -1)
-            {
-                e->value = (e->value << 2) + tsID;
-//                qDebug("ABS_MT_TRACKING_ID: %d", e->value);
-            }
-        }
-        else if(e->code == ABS_MT_SLOT)
-        {
-            e->value = (e->value << 2) + tsID;
-//            qDebug("ABS_MT_SLOT: %d", e->value);
-        }
-    }
+
     return e;
 }
 
@@ -888,6 +896,7 @@ void QEvDevLinkedTouchHandlerThread::run()
     ::input_event buffer[32];
 //    unsigned long *intBuffer = (unsigned long *) buffer;
     unsigned int events = 0;
+    QEvDevLinkedTouchHandler *lastLTH = m_activeLinkedDevices->begin().value();
 
     while(true)
     {
@@ -896,13 +905,19 @@ void QEvDevLinkedTouchHandlerThread::run()
         {
             while((events = linkedTouchHandler->readData(buffer, sizeof(buffer))))
             {
+                if(lastLTH != linkedTouchHandler)
+                {
+//                    qDebug("last: %p, this %p", lastLTH, linkedTouchHandler);
+                    d->processInputEvent(&linkedTouchHandler->m_lastEvent);
+                    lastLTH = linkedTouchHandler;
+                }
 //                qDebug() << "device" << linkedTouchHandler->m_deviceNode << events / sizeof(::input_event);
 //                qDebug("buffer: %p", buffer);
 //                for(unsigned int i = 0; i < events / sizeof(::input_event); i++)
 //                    qDebug("%08lx %08lx %08lx %08lx", intBuffer[i * 4 + 0], intBuffer[i * 4 + 1], intBuffer[i * 4 + 2], intBuffer[i * 4 + 3]);
                 for(unsigned int i = 0; i < events / sizeof(::input_event); i++)
 //                    d->processInputEvent(&buffer[i]);
-                    d->processInputEvent(prepareEvent(buffer + i, linkedTouchHandler->m_tsID));
+                    d->processInputEvent(prepareEvent(linkedTouchHandler, buffer + i));
             }
 //            qDebug() << "device" << linkedTouchHandler->m_deviceNode << events;
         }

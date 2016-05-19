@@ -56,7 +56,7 @@
 struct mtdev;
 #endif
 
-#define EVDEBUG 1
+//#define EVDEBUG 1
 
 QT_BEGIN_NAMESPACE
 
@@ -107,6 +107,7 @@ public:
     int m_tsID;
     int m_fd;
     QString m_deviceNode;
+    input_event m_lastEvent;
 
 private:
 };
@@ -117,7 +118,7 @@ public:
     explicit QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *);
 //    ~QEvDevLinkedTouchHandlerThread();
     void run() Q_DECL_OVERRIDE;
-    input_event *prepareEvent(input_event *e, int tsID);
+    input_event *prepareEvent(QEvDevLinkedTouchHandler *linkedTouchHandler, input_event *e);
 //    QEvdevTouchScreenHandler *handler() { return m_handler; }
 
 private:
