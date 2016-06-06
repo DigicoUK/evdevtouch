@@ -118,10 +118,12 @@ public:
     explicit QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *);
 //    ~QEvDevLinkedTouchHandlerThread();
     void run() Q_DECL_OVERRIDE;
+    void quit();
     input_event *prepareEvent(QEvDevLinkedTouchHandler *linkedTouchHandler, input_event *e);
 //    QEvdevTouchScreenHandler *handler() { return m_handler; }
 
 private:
+    bool m_run;
 //    QString m_device;
 //    QString m_spec;
 //    QEvdevTouchScreenHandler *m_handler;

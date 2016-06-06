@@ -746,7 +746,7 @@ err:
 
 QEvDevLinkedTouchHandlerThread::QEvDevLinkedTouchHandlerThread(QHash<QString, QEvDevLinkedTouchHandler *> *activeLinkedDevices)
 {
-    qDebug() << "thread construct";
+    m_run = true;
     m_activeLinkedDevices = activeLinkedDevices;
     d = new QEvdevTouchScreenData();
     d->m_typeB = true;
@@ -836,6 +836,11 @@ QEvDevLinkedTouchHandlerThread::QEvDevLinkedTouchHandlerThread(QHash<QString, QE
 #endif
 }
 
+void QEvDevLinkedTouchHandlerThread::quit()
+{
+    m_run = false;
+}
+
 #ifdef EVDEBUG
 const char *QEvDevLinkedTouchHandlerThread::getEventCodeString(int eventType, int eventCode)
 {
@@ -898,7 +903,7 @@ void QEvDevLinkedTouchHandlerThread::run()
     unsigned int events = 0;
     QEvDevLinkedTouchHandler *lastLTH = m_activeLinkedDevices->begin().value();
 
-    while(true)
+    while(m_run)
     {
 //        qDebug() << "thread run";
         foreach(QEvDevLinkedTouchHandler *linkedTouchHandler, *m_activeLinkedDevices)
