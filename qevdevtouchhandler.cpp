@@ -751,7 +751,7 @@ QEvDevLinkedTouchHandlerThread::QEvDevLinkedTouchHandlerThread(QHash<QString, QE
     d = new QEvdevTouchScreenData();
     d->m_typeB = true;
     d->m_singleTouch = false;
-    d->hw_range_x_max = 1280 * 3;
+    d->hw_range_x_max = 1280 * activeLinkedDevices->count();
     d->hw_range_y_max = 800;
     d->registerDevice();
 
