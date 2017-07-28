@@ -136,6 +136,7 @@ public:
     int hw_range_y_max;
     int hw_pressure_min;
     int hw_pressure_max;
+    uint xOffset;
     QString hw_name;
     QString deviceNode;
     bool m_forceToActiveWindow;
@@ -165,7 +166,7 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, co
       m_timeStamp(0), m_lastTimeStamp(0),
       hw_range_x_min(0), hw_range_x_max(0),
       hw_range_y_min(0), hw_range_y_max(0),
-      hw_pressure_min(0), hw_pressure_max(0),
+      hw_pressure_min(0), hw_pressure_max(0), xOffset(0),
       m_forceToActiveWindow(false), m_typeB(false), m_singleTouch(false),
       m_filtered(false), m_prediction(0)
 {
@@ -201,7 +202,9 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
     int rotationAngle = 0;
     bool invertx = false;
     bool inverty = false;
-    for (int i = 0; i < args.count(); ++i) {
+    uint xOffset = 0;
+        for (int i = 0; i < args.count(); ++i) {
+        xOffset = 0;
         if (args.at(i).startsWith(QLatin1String("rotate"))) {
             QString rotateArg = args.at(i).section(QLatin1Char('='), 1, 1);
             bool ok;
@@ -220,10 +223,15 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
             invertx = true;
         } else if (args.at(i) == QLatin1String("inverty")) {
             inverty = true;
+        } else if (args.at(i).startsWith(QLatin1String("xoffset"))) {
+            QString xOffsetArg = args.at(i).section(QLatin1Char('='), 1, 1);
+            xOffset = xOffsetArg.toUInt();
+            qDebug() << "xOffset:" << xOffset;
         }
     }
 
     qCDebug(qLcEvdevTouch, "evdevtouch: Using device %s", qPrintable(device));
+    qDebug() << device << spec << parent << args << "xOffset:" << xOffset;
 
     m_fd = QT_OPEN(device.toLocal8Bit().constData(), O_RDONLY | O_NDELAY, 0);
 
@@ -259,6 +267,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
     }
 #endif
 
+    d->xOffset = xOffset;
     d->deviceNode = device;
     qCDebug(qLcEvdevTouch,
             "evdevtouch: %s: Protocol type %c %s (%s), filtered=%s",
@@ -320,6 +329,11 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
         qCDebug(qLcEvdevTouch, "evdevtouch: found ti-tsc, overriding: min X: %d max X: %d min Y: %d max Y: %d",
                 d->hw_range_x_min, d->hw_range_x_max, d->hw_range_y_min, d->hw_range_y_max);
     }
+
+    d->hw_range_x_min = 0;
+    d->hw_range_x_max = 1279;
+    d->hw_range_y_min = 0;
+    d->hw_range_y_max = 799;
 
     bool grabSuccess = !ioctl(m_fd, EVIOCGRAB, (void *) 1);
     if (grabSuccess)
@@ -759,7 +773,7 @@ void QEvdevTouchScreenData::reportPoints()
         // Generate a screen position that is always inside the active window
         // or the primary screen.  Even though we report this as a QRectF, internally
         // Qt uses QRect/QPoint so we need to bound the size to winRect.size() - QSize(1, 1)
-        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
+        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() / 2 - 1) + xOffset;
         const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
         const qreal sizeRatio = (winRect.width() + winRect.height()) / qreal(hw_w + hw_h);
         if (tp.area.width() == -1) // touch major was not provided
