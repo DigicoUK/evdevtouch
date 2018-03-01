@@ -203,8 +203,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
     bool invertx = false;
     bool inverty = false;
     uint xOffset = 0;
-        for (int i = 0; i < args.count(); ++i) {
-        xOffset = 0;
+    for (int i = 0; i < args.count(); ++i) {
         if (args.at(i).startsWith(QLatin1String("rotate"))) {
             QString rotateArg = args.at(i).section(QLatin1Char('='), 1, 1);
             bool ok;
@@ -531,6 +530,23 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         } else if (data->code == ABS_MT_TRACKING_ID) {
             m_currentData.trackingId = data->value;
             if (m_typeB) {
+                // -1 means that the touch has been released. Anything else means that the screen is touched.
+                // If current slot has id of -1 and it previously had something else and now we are again changing it to something
+                // else it means that inside one sync the point is being touched and released
+                if (m_contacts[m_currentSlot].trackingId == -1 && m_lastContacts[m_currentSlot].trackingId != -1 && m_currentData.trackingId != -1)
+                {
+                    const auto& old = m_lastContacts[m_currentSlot];
+
+                    // NOTE: We need to get touch point generated somehow here or ignore the touch.
+                    //       Ignoring the touch would result problems in move etc so the user would
+                    //       need to touch again if this happens. This is though not very common but
+                    //       could still result in bad UX. The problem is that adding a touch point here
+                    //       won't work as the touch points are cleared on start of the syn...
+                    //       NOTE: If we were to set the trackingId of the old contact in m_lastContacts to -1
+                    //             that should trigger release event... Could this work???
+                    qCDebug(qLcEvdevTouch, "Two ABS_MT_TRACKING_ID events at same slot in one sync call... Previous tracking id was: %d new tracking id is: %d", old.trackingId, m_currentData.trackingId);
+                }
+
                 if (m_currentData.trackingId == -1) {
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
                 } else {
@@ -587,7 +603,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         while (it.hasNext()) {
             it.next();
             Contact &contact(it.value());
-
+            
             if (!contact.state)
                 continue;
 
