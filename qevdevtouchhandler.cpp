@@ -203,8 +203,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
     bool invertx = false;
     bool inverty = false;
     uint xOffset = 0;
-        for (int i = 0; i < args.count(); ++i) {
-        xOffset = 0;
+    for (int i = 0; i < args.count(); ++i) {
         if (args.at(i).startsWith(QLatin1String("rotate"))) {
             QString rotateArg = args.at(i).section(QLatin1Char('='), 1, 1);
             bool ok;
