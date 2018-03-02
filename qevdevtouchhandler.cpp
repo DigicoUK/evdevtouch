@@ -549,7 +549,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                     qCDebug(qLcEvdevTouch, "Two ABS_MT_TRACKING_ID events at same slot in one sync call... Previous tracking id was: %d new tracking id is: %d", old.trackingId, m_currentData.trackingId);
                 }
                 
-                qCDebug(qLcEvdevTouch, "Slot %d tracking id is: %d", m_currentSlot, m_currentData.trackingId);
+                qCDebug(qLcEvdevTouch, "Slot %d tracking id is: %d position: (%d, %d) screen: %s", m_currentSlot, m_currentData.trackingId, m_contacts[m_currentSlot].x, m_contacts[m_currentSlot].y, m_screenName);
 
                 if (m_currentData.trackingId == -1) {
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
