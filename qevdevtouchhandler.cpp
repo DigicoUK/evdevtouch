@@ -55,6 +55,8 @@
 #include <linux/input.h>
 #endif
 
+#include <math.h>
+
 #if QT_CONFIG(mtdev)
 extern "C" {
 #include <mtdev.h>
@@ -915,7 +917,7 @@ void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
     }
 
     QList<QWindowSystemInterface::TouchPoint> points = m_handler->d->m_touchPoints;
-    const QList<QWindowSystemInterface::TouchPoint> &lastPoints = m_handler->d->m_lastTouchPoints;
+    QList<QWindowSystemInterface::TouchPoint> lastPoints = m_handler->d->m_lastTouchPoints;
 
     m_handler->d->m_mutex.unlock();
 
