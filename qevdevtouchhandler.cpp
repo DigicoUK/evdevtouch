@@ -488,6 +488,7 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
     if (contact.trackingId == -1)
     {
         qCDebug(qLcEvdevTouchExtra, "Ignoring contact with id -1 in screen %d", (xOffset == 0 ? 1 : 2));
+        return;
     }
 
     QWindowSystemInterface::TouchPoint tp;
@@ -514,19 +515,21 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
 
     if (contact.state == Qt::TouchPointReleased)
     {
-        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d released (%d/%d)",
+        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d released (%d/%d) id used: %d",
                                     (xOffset == 0 ? 1 : 2),
                                     contact.trackingId,
                                     contact.x,
-                                    contact.y);
+                                    contact.y,
+                                    tp.id);
     }
     else if (contact.state == Qt::TouchPointPressed)
     {
-        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d pressed (%d/%d)",
+        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d pressed (%d/%d) id used: %d",
                                     (xOffset == 0 ? 1 : 2),
                                     contact.trackingId,
                                     contact.x,
-                                    contact.y);
+                                    contact.y,
+                                    tp.id);
     }
 }
 
