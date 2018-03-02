@@ -66,6 +66,7 @@ extern "C" {
 QT_BEGIN_NAMESPACE
 
 Q_LOGGING_CATEGORY(qLcEvdevTouch, "qt.qpa.input")
+Q_LOGGING_CATEGORY(qLcEvdevTouchExtra, "qt.qpa.input.extra")
 
 /* android (and perhaps some other linux-derived stuff) don't define everything
  * in linux/input.h, so we'll need to do that ourselves.
@@ -484,8 +485,13 @@ void QEvdevTouchScreenHandler::unregisterTouchDevice()
 
 void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPointStates *combinedStates)
 {
+    if (contact.trackingId == -1)
+    {
+        qCDebug(qLcEvdevTouchExtra, "Ignoring contact with id -1 in screen %d", (xOffset == 0 ? 1 : 2));
+    }
+
     QWindowSystemInterface::TouchPoint tp;
-    tp.id = contact.trackingId;
+    tp.id = contact.trackingId + xOffset;       // Separate the id's of different screens
     tp.flags = contact.flags;
     tp.state = contact.state;
     *combinedStates |= tp.state;
@@ -508,7 +514,7 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
 
     if (contact.state == Qt::TouchPointReleased)
     {
-        qCDebug(qLcEvdevTouch, "Screen %d with point with tracking id: %d released (%d/%d)",
+        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d released (%d/%d)",
                                     (xOffset == 0 ? 1 : 2),
                                     contact.trackingId,
                                     contact.x,
@@ -516,7 +522,7 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
     }
     else if (contact.state == Qt::TouchPointPressed)
     {
-        qCDebug(qLcEvdevTouch, "Screen %d with point with tracking id: %d pressed (%d/%d)",
+        qCDebug(qLcEvdevTouchExtra, "Screen %d with point with tracking id: %d pressed (%d/%d)",
                                     (xOffset == 0 ? 1 : 2),
                                     contact.trackingId,
                                     contact.x,
@@ -613,8 +619,6 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         m_currentData = Contact();
 
     } else if (data->type == EV_SYN && data->code == SYN_REPORT) {
-
-        qCDebug(qLcEvdevTouch, "Sync points to screen");
 
         // Ensure valid IDs even when the driver does not report ABS_MT_TRACKING_ID.
         if (!m_contacts.isEmpty() && m_contacts.constBegin().value().trackingId == -1)
