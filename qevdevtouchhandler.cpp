@@ -505,6 +505,23 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
     tp.rawPositions.append(QPointF(contact.x, contact.y));
 
     m_touchPoints.append(tp);
+
+    if (contact.state == Qt::TouchPointReleased)
+    {
+        qCDebug(qLcEvdevTouch, "Screen %d with point with tracking id: %d released (%d/%d)",
+                                    (xOffset == 0 ? 1 : 2),
+                                    contact.trackingId,
+                                    contact.x,
+                                    contact.y);
+    }
+    else if (contact.state == Qt::TouchPointPressed)
+    {
+        qCDebug(qLcEvdevTouch, "Screen %d with point with tracking id: %d pressed (%d/%d)",
+                                    (xOffset == 0 ? 1 : 2),
+                                    contact.trackingId,
+                                    contact.x,
+                                    contact.y);
+    }
 }
 
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
@@ -548,7 +565,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                     //             that should trigger release event... Could this work???
                     qCDebug(qLcEvdevTouch, "Two ABS_MT_TRACKING_ID events at same slot in one sync call... Previous tracking id was: %d new tracking id is: %d", old.trackingId, m_currentData.trackingId);
                 }
-                
+                /*
                 qCDebug(qLcEvdevTouch, "Slot %d (screen %d / offset: %d) tracking id is: %d/%d position: (%d, %d) / (%d, %d)",
                                                                                                                 m_currentSlot,
                                                                                                                 (xOffset != 0 ? 2 : 1),
@@ -558,7 +575,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                                                                                                                 m_contacts[m_currentSlot].x,
                                                                                                                 m_contacts[m_currentSlot].y,
                                                                                                                 m_currentData.x,
-                                                                                                                m_currentData.y);
+                                                                                                                m_currentData.y);*/
 
                 if (m_currentData.trackingId == -1) {
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
@@ -596,6 +613,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
         m_currentData = Contact();
 
     } else if (data->type == EV_SYN && data->code == SYN_REPORT) {
+
+        qCDebug(qLcEvdevTouch, "Sync points to screen");
 
         // Ensure valid IDs even when the driver does not report ABS_MT_TRACKING_ID.
         if (!m_contacts.isEmpty() && m_contacts.constBegin().value().trackingId == -1)
