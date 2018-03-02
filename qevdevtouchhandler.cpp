@@ -546,6 +546,8 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                     //             that should trigger release event... Could this work???
                     qCDebug(qLcEvdevTouch, "Two ABS_MT_TRACKING_ID events at same slot in one sync call... Previous tracking id was: %d new tracking id is: %d", old.trackingId, m_currentData.trackingId);
                 }
+                
+                qCDebug(qLcEvdevTouch, "Slot %d tracking id is: %d", m_currentSlot, m_currentData.trackingId);
 
                 if (m_currentData.trackingId == -1) {
                     m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
