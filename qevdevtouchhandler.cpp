@@ -148,7 +148,7 @@ public:
     mutable QPointer<QScreen> m_screen;
 
     // Touch filtering and prediction are part of the same thing. The default
-    // prediction is 0ms, but sensible results can be achieved by setting it
+    // prediction is 0ms, but sensible results can be acheived by setting it
     // to, for instance, 16ms.
     // For filtering to work well, the QPA plugin should provide a dead-steady
     // implementation of QPlatformWindow::requestUpdate().
@@ -192,9 +192,9 @@ static inline bool testBit(long bit, const long *array)
 #endif
 
 QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const QString &spec, QObject *parent)
-    : QObject(parent), m_notify(nullptr), m_fd(-1), d(nullptr), m_device(nullptr)
+    : QObject(parent), m_notify(Q_NULLPTR), m_fd(-1), d(Q_NULLPTR), m_device(Q_NULLPTR)
 #if QT_CONFIG(mtdev)
-      , m_mtdev(nullptr)
+      , m_mtdev(Q_NULLPTR)
 #endif
 {
     setObjectName(QLatin1String("Evdev Touch Handler"));
@@ -231,7 +231,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
 
     if (m_fd >= 0) {
         m_notify = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
-        connect(m_notify, &QSocketNotifier::activated, this, &QEvdevTouchScreenHandler::readData);
+        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readData()));
     } else {
         qErrnoWarning(errno, "evdevtouch: Cannot open input device %s", qPrintable(device));
         return;
@@ -427,7 +427,7 @@ err:
             qErrnoWarning(errno, "evdevtouch: Could not read from input device");
             if (errno == ENODEV) { // device got disconnected -> stop reading
                 delete m_notify;
-                m_notify = nullptr;
+                m_notify = Q_NULLPTR;
 
                 QT_CLOSE(m_fd);
                 m_fd = -1;
@@ -466,7 +466,7 @@ void QEvdevTouchScreenHandler::unregisterTouchDevice()
         delete m_device;
     }
 
-    m_device = nullptr;
+    m_device = Q_NULLPTR;
 }
 
 void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPointStates *combinedStates)
@@ -781,13 +781,13 @@ void QEvdevTouchScreenData::reportPoints()
     if (m_filtered)
         emit q->touchPointsUpdated();
     else
-        QWindowSystemInterface::handleTouchEvent(nullptr, q->touchDevice(), m_touchPoints);
+        QWindowSystemInterface::handleTouchEvent(Q_NULLPTR, q->touchDevice(), m_touchPoints);
 }
 
 QEvdevTouchScreenHandlerThread::QEvdevTouchScreenHandlerThread(const QString &device, const QString &spec, QObject *parent)
-    : QDaemonThread(parent), m_device(device), m_spec(spec), m_handler(nullptr), m_touchDeviceRegistered(false)
+    : QDaemonThread(parent), m_device(device), m_spec(spec), m_handler(Q_NULLPTR), m_touchDeviceRegistered(false)
     , m_touchUpdatePending(false)
-    , m_filterWindow(nullptr)
+    , m_filterWindow(Q_NULLPTR)
     , m_touchRate(-1)
 {
     start();
@@ -812,7 +812,7 @@ void QEvdevTouchScreenHandlerThread::run()
     exec();
 
     delete m_handler;
-    m_handler = nullptr;
+    m_handler = Q_NULLPTR;
 }
 
 bool QEvdevTouchScreenHandlerThread::isTouchDeviceRegistered() const
@@ -885,7 +885,7 @@ void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
     }
 
     QList<QWindowSystemInterface::TouchPoint> points = m_handler->d->m_touchPoints;
-    QList<QWindowSystemInterface::TouchPoint> lastPoints = m_handler->d->m_lastTouchPoints;
+    const QList<QWindowSystemInterface::TouchPoint> &lastPoints = m_handler->d->m_lastTouchPoints;
 
     m_handler->d->m_mutex.unlock();
 
@@ -953,7 +953,7 @@ void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
 
     m_filteredPoints = filteredPoints;
 
-    QWindowSystemInterface::handleTouchEvent(nullptr,
+    QWindowSystemInterface::handleTouchEvent(Q_NULLPTR,
                                              m_handler->touchDevice(),
                                              points);
 }
