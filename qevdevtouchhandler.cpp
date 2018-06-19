@@ -223,6 +223,11 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
         } else if (args.at(i) == QLatin1String("inverty")) {
             inverty = true;
         }
+        else {
+            qCDebug(qLcEvdevTouch,
+                    "evdevtouch: Received argument: %s",
+                    qPrintable(args.at(i)))
+        }
     }
 
     qCDebug(qLcEvdevTouch, "evdevtouch: Using device %s", qPrintable(device));
