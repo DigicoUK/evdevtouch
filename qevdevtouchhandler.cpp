@@ -226,7 +226,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
         else {
             qCDebug(qLcEvdevTouch,
                     "evdevtouch: Received argument: %s",
-                    qPrintable(args.at(i)))
+                    qPrintable(args.at(i)));
         }
     }
 
