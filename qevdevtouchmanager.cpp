@@ -142,7 +142,7 @@ void QEvdevTouchManager::removeDevice(const QString &deviceNode)
 {
     if (m_activeDevices.contains(deviceNode)) {
         qCDebug(qLcEvdevTouch) << "evdevtouch: Removing device at" << deviceNode;
-        QEvdevTouchScreenHandlerThread *handler = m_activeDevices.value(deviceNode);
+        auto handler = m_activeDevices.value(deviceNode);
         m_activeDevices.remove(deviceNode);
         delete handler;
 
