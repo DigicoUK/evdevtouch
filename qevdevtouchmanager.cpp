@@ -153,7 +153,8 @@ void QEvdevTouchManager::removeDevice(const QString &deviceNode)
 void QEvdevTouchManager::updateInputDeviceCount()
 {
     int registeredTouchDevices = 0;
-    Q_FOREACH (QEvdevTouchScreenHandlerThread *handler, m_activeDevices) {
+    for (const auto handler : m_activeDevices)
+    {
         if (handler->isTouchDeviceRegistered())
             ++registeredTouchDevices;
     }
