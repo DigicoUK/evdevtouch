@@ -884,10 +884,10 @@ void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
     if (m_touchRate < 0.0f)
     {
         qCDebug(qLcEvdevTouch, "evdevtouch: screen geometry: (%d, %d) widht/height: (%d, %d)", 
-                                winRect.x,
-                                winRect.y,
-                                winRect.width,
-                                winRect.height);
+                                winRect.x(),
+                                winRect.y(),
+                                winRect.width(),
+                                winRect.height());
     }
 
     float vsyncDelta = 1.0f / QGuiApplication::primaryScreen()->refreshRate();
