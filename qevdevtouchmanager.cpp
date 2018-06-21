@@ -66,10 +66,17 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
 
     QStringList args = spec.split(QLatin1Char(':'));
     QStringList devices;
+    bool use_combiner = false;
 
     foreach (const QString &arg, args) {
-        if (arg.startsWith(QLatin1String("/dev/"))) {
+        if (arg.startsWith(QLatin1String("/dev/")))
+        {
             devices.append(arg);
+            args.removeAll(arg);
+        }
+        else if (arg.startsWith(QLatin1String("use_combiner")))
+        {
+            use_combiner = true;
             args.removeAll(arg);
         }
     }
@@ -77,8 +84,24 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
     // build new specification without /dev/ elements
     m_spec = args.join(QLatin1Char(':'));
 
-    foreach (const QString &device, devices)
-        addDevice(device);
+    if (use_combiner && !devices.isEmpty())
+    {
+        qCDebug(qLcEvdevTouch) << "evdevtouch: Adding multiscreen device for" << devices.join(QLatin1Char(':'));
+
+        /*
+        auto handler = new QEvdevTouchMultiScreenHandlerThread(devices, m_spec);
+        if (handler) {
+            m_activeDevices.insert(deviceNode, handler);
+            connect(handler, &QEvdevTouchMultiScreenHandlerThread::touchDeviceRegistered, this, &QEvdevTouchManager::updateInputDeviceCount);
+        } else {
+            qWarning("evdevtouch: Failed to open touch device %s", qPrintable(devices.join(QLatin1Char(':')));
+        }*/
+    }
+    else
+    {
+        foreach (const QString &device, devices)
+            addDevice(device);
+    }
 
     // when no devices specified, use device discovery to scan and monitor
     if (devices.isEmpty()) {

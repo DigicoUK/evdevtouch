@@ -58,7 +58,7 @@
 QT_BEGIN_NAMESPACE
 
 class QDeviceDiscovery;
-class QEvdevTouchScreenHandlerThread;
+class QEvdevTouchScreenHandlerThreadBase;
 
 class QEvdevTouchManager : public QObject
 {
@@ -74,7 +74,7 @@ public:
 private:
     QString m_spec;
     QDeviceDiscovery *m_deviceDiscovery;
-    QHash<QString, QEvdevTouchScreenHandlerThread *> m_activeDevices;
+    QHash<QString, QEvdevTouchScreenHandlerThreadBase *> m_activeDevices;
 };
 
 QT_END_NAMESPACE

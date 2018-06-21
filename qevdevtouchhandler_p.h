@@ -103,7 +103,34 @@ private:
 #endif
 };
 
-class QEvdevTouchScreenHandlerThread : public QDaemonThread
+class QEvdevTouchScreenHandlerThreadBase : public QDaemonThread
+{
+    Q_OBJECT
+public:
+    explicit QEvdevTouchScreenHandlerThreadBase(QObject* parent);
+
+    bool isTouchDeviceRegistered() const;
+
+    bool eventFilter(QObject *object, QEvent *event) final;
+
+    void scheduleTouchPointUpdate();
+
+signals:
+    void touchDeviceRegistered();
+
+protected:
+    Q_INVOKABLE void notifyTouchDeviceRegistered();
+
+private:
+    virtual void filterAndSendTouchPoints() = 0;
+
+private:
+    bool        m_touchUpdatePending;
+    QWindow *   m_filterWindow;
+    bool        m_touchDeviceRegistered;
+};
+
+class QEvdevTouchScreenHandlerThread : public QEvdevTouchScreenHandlerThreadBase
 {
     Q_OBJECT
 public:
@@ -111,29 +138,14 @@ public:
     ~QEvdevTouchScreenHandlerThread();
     void run() override;
 
-    bool isTouchDeviceRegistered() const;
-
-    bool eventFilter(QObject *object, QEvent *event) override;
-
-    void scheduleTouchPointUpdate();
-
-signals:
-    void touchDeviceRegistered();
-
 private:
-    Q_INVOKABLE void notifyTouchDeviceRegistered();
-
-    void filterAndSendTouchPoints();
+    void filterAndSendTouchPoints() final;
     QRect targetScreenGeometry() const;
 
     QString m_device;
     QString m_spec;
     QEvdevTouchScreenHandler *m_handler;
-    bool m_touchDeviceRegistered;
-
-    bool m_touchUpdatePending;
-    QWindow *m_filterWindow;
-
+    
     struct FilteredTouchPoint {
         QEvdevTouchFilter x;
         QEvdevTouchFilter y;

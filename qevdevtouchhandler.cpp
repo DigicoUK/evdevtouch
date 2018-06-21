@@ -789,10 +789,56 @@ void QEvdevTouchScreenData::reportPoints()
         QWindowSystemInterface::handleTouchEvent(nullptr, q->touchDevice(), m_touchPoints);
 }
 
-QEvdevTouchScreenHandlerThread::QEvdevTouchScreenHandlerThread(const QString &device, const QString &spec, QObject *parent)
-    : QDaemonThread(parent), m_device(device), m_spec(spec), m_handler(nullptr), m_touchDeviceRegistered(false)
+QEvdevTouchScreenHandlerThreadBase::QEvdevTouchScreenHandlerThreadBase(QObject* parent)
+    : QDaemonThread(parent)
     , m_touchUpdatePending(false)
     , m_filterWindow(nullptr)
+    , m_touchDeviceRegistered(false)
+{}
+
+bool QEvdevTouchScreenHandlerThreadBase::isTouchDeviceRegistered() const
+{
+    return m_touchDeviceRegistered;
+}
+
+void QEvdevTouchScreenHandlerThreadBase::scheduleTouchPointUpdate()
+{
+    QWindow *window = QGuiApplication::focusWindow();
+    if (window != m_filterWindow) {
+        if (m_filterWindow)
+            m_filterWindow->removeEventFilter(this);
+        m_filterWindow = window;
+        if (m_filterWindow)
+            m_filterWindow->installEventFilter(this);
+    }
+    if (m_filterWindow) {
+        m_touchUpdatePending = true;
+        m_filterWindow->requestUpdate();
+    }
+}
+
+bool QEvdevTouchScreenHandlerThreadBase::eventFilter(QObject *object, QEvent *event)
+{
+    if (m_touchUpdatePending && object == m_filterWindow && event->type() == QEvent::UpdateRequest) {
+        m_touchUpdatePending = false;
+        filterAndSendTouchPoints();
+    }
+    return false;
+}
+
+void QEvdevTouchScreenHandlerThreadBase::notifyTouchDeviceRegistered()
+{
+    m_touchDeviceRegistered = true;
+    emit touchDeviceRegistered();
+}
+
+
+
+QEvdevTouchScreenHandlerThread::QEvdevTouchScreenHandlerThread(const QString &device, const QString &spec, QObject *parent)
+    : QEvdevTouchScreenHandlerThreadBase(parent)
+    , m_device(device)
+    , m_spec(spec)
+    , m_handler(nullptr)
     , m_touchRate(-1)
 {
     start();
@@ -818,42 +864,6 @@ void QEvdevTouchScreenHandlerThread::run()
 
     delete m_handler;
     m_handler = nullptr;
-}
-
-bool QEvdevTouchScreenHandlerThread::isTouchDeviceRegistered() const
-{
-    return m_touchDeviceRegistered;
-}
-
-void QEvdevTouchScreenHandlerThread::notifyTouchDeviceRegistered()
-{
-    m_touchDeviceRegistered = true;
-    emit touchDeviceRegistered();
-}
-
-void QEvdevTouchScreenHandlerThread::scheduleTouchPointUpdate()
-{
-    QWindow *window = QGuiApplication::focusWindow();
-    if (window != m_filterWindow) {
-        if (m_filterWindow)
-            m_filterWindow->removeEventFilter(this);
-        m_filterWindow = window;
-        if (m_filterWindow)
-            m_filterWindow->installEventFilter(this);
-    }
-    if (m_filterWindow) {
-        m_touchUpdatePending = true;
-        m_filterWindow->requestUpdate();
-    }
-}
-
-bool QEvdevTouchScreenHandlerThread::eventFilter(QObject *object, QEvent *event)
-{
-    if (m_touchUpdatePending && object == m_filterWindow && event->type() == QEvent::UpdateRequest) {
-        m_touchUpdatePending = false;
-        filterAndSendTouchPoints();
-    }
-    return false;
 }
 
 void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
