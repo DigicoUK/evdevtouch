@@ -70,6 +70,12 @@ QT_BEGIN_NAMESPACE
 class QSocketNotifier;
 class QEvdevTouchScreenData;
 
+struct TouchData {
+	double                                      TouchDelta;
+	QList<QWindowSystemInterface::TouchPoint>   TouchPoints;
+    QList<QWindowSystemInterface::TouchPoint>   LastTouchPoints;
+};
+
 class QEvdevTouchScreenHandler : public QObject
 {
     Q_OBJECT
@@ -83,6 +89,8 @@ public:
     bool isFiltered() const;
 
     void readData();
+
+    TouchData getTouchData() const;
 
 signals:
     void touchPointsUpdated();
@@ -140,7 +148,6 @@ public:
 
 private:
     void filterAndSendTouchPoints() final;
-    QRect targetScreenGeometry() const;
 
     QString m_device;
     QString m_spec;

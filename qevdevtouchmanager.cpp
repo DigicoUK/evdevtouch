@@ -67,6 +67,7 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
     QStringList args = spec.split(QLatin1Char(':'));
     QStringList devices;
     bool use_combiner = false;
+    bool filtered = false;
 
     foreach (const QString &arg, args) {
         if (arg.startsWith(QLatin1String("/dev/")))
@@ -77,8 +78,19 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
         else if (arg.startsWith(QLatin1String("use_combiner")))
         {
             use_combiner = true;
+            filtered     = true;    // Always filtered when combiner is in use
             args.removeAll(arg);
         }
+        else if (arg == QStringLiteral("filtered"))
+        {
+            filtered = true;
+            args.removeAll(arg);
+        }
+    }
+
+    if (filtered)
+    {
+        args.push_back(QStringLiteral("filtered"));
     }
 
     // build new specification without /dev/ elements
@@ -87,6 +99,11 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
     if (use_combiner && !devices.isEmpty())
     {
         qCDebug(qLcEvdevTouch) << "evdevtouch: Adding multiscreen device for" << devices.join(QLatin1Char(':'));
+
+        for (const QString &device : devices)
+        {
+            addDevice(device);
+        }
 
         /*
         auto handler = new QEvdevTouchMultiScreenHandlerThread(devices, m_spec);
