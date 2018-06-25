@@ -98,21 +98,16 @@ QEvdevTouchManager::QEvdevTouchManager(const QString &key, const QString &specif
 
     if (use_combiner && !devices.isEmpty())
     {
-        qCDebug(qLcEvdevTouch) << "evdevtouch: Adding multiscreen device for" << devices.join(QLatin1Char(':'));
+        auto devices_str = devices.join(QLatin1Char(':'));
+        qCDebug(qLcEvdevTouch) << "evdevtouch: Adding multiscreen device for" << devices_str;
 
-        for (const QString &device : devices)
-        {
-            addDevice(device);
-        }
-
-        /*
         auto handler = new QEvdevTouchMultiScreenHandlerThread(devices, m_spec);
         if (handler) {
-            m_activeDevices.insert(deviceNode, handler);
+            m_activeDevices.insert(devices_str, handler);
             connect(handler, &QEvdevTouchMultiScreenHandlerThread::touchDeviceRegistered, this, &QEvdevTouchManager::updateInputDeviceCount);
         } else {
-            qWarning("evdevtouch: Failed to open touch device %s", qPrintable(devices.join(QLatin1Char(':')));
-        }*/
+            qWarning("evdevtouch: Failed to open touch device %s", qPrintable(devices_str));
+        }
     }
     else
     {

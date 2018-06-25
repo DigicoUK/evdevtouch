@@ -60,6 +60,7 @@
 #include <QtCore/private/qthread_p.h>
 #include <qpa/qwindowsysteminterface.h>
 #include "qevdevtouchfilter_p.h"
+#include <memory>
 
 #if QT_CONFIG(mtdev)
 struct mtdev;
@@ -91,6 +92,8 @@ public:
     void readData();
 
     TouchData getTouchData() const;
+    QRect screenGeometry() const;
+    int prediction() const;
 
 signals:
     void touchPointsUpdated();
@@ -128,9 +131,22 @@ signals:
 
 protected:
     Q_INVOKABLE void notifyTouchDeviceRegistered();
+    float calculateUpdatedTouchRate(float old_rate, double touch_delta) const;
+    //
 
-private:
-    virtual void filterAndSendTouchPoints() = 0;
+protected:
+    struct FilteredTouchPoint {
+        QEvdevTouchFilter x;
+        QEvdevTouchFilter y;
+        QWindowSystemInterface::TouchPoint touchPoint;
+    };
+    virtual void applyFilterAndSendTouchPoints() = 0;
+    QHash<int, FilteredTouchPoint> filterAndSendTouchPoints(QRect winRect,
+                                                            TouchData data,
+                                                            float touch_rate,
+                                                            QHash<int, FilteredTouchPoint> current_filtered_points,
+                                                            int prediction,
+                                                            QTouchDevice * touch_device) const;
 
 private:
     bool        m_touchUpdatePending;
@@ -147,20 +163,47 @@ public:
     void run() override;
 
 private:
-    void filterAndSendTouchPoints() final;
+    void applyFilterAndSendTouchPoints() final;
 
     QString m_device;
     QString m_spec;
     QEvdevTouchScreenHandler *m_handler;
-    
-    struct FilteredTouchPoint {
-        QEvdevTouchFilter x;
-        QEvdevTouchFilter y;
-        QWindowSystemInterface::TouchPoint touchPoint;
-    };
     QHash<int, FilteredTouchPoint> m_filteredPoints;
 
     float m_touchRate;
+};
+
+class QEvdevTouchMultiScreenHandlerThread : public QEvdevTouchScreenHandlerThreadBase
+{
+    Q_OBJECT
+public:
+    explicit QEvdevTouchMultiScreenHandlerThread(const QStringList& devices, const QString &spec, QObject *parent = nullptr);
+    ~QEvdevTouchMultiScreenHandlerThread();
+
+    void run() override;
+
+private:
+    void applyFilterAndSendTouchPoints() final;
+
+private:
+    struct TouchHandlerData {
+        TouchHandlerData(std::shared_ptr<QEvdevTouchScreenHandler> handler)
+            : Handler(std::move(handler))
+            , FilteredPoints()
+            , TouchRate(-1.0f)
+            , RequiresUpdate(true)
+        {}
+
+        std::shared_ptr<QEvdevTouchScreenHandler>   Handler;
+        QHash<int, FilteredTouchPoint>              FilteredPoints;
+        float                                       TouchRate;
+        bool                                        RequiresUpdate;
+    };
+
+
+    QStringList                     m_devices;
+    QString                         m_spec;
+    std::vector<TouchHandlerData>   m_touch_handlers;
 };
 
 QT_END_NAMESPACE

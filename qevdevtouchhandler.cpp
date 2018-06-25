@@ -453,6 +453,16 @@ TouchData QEvdevTouchScreenHandler::getTouchData() const
     return TouchData {touchDelta, d->m_touchPoints, d->m_lastTouchPoints};
 }
 
+QRect QEvdevTouchScreenHandler::screenGeometry() const
+{
+    return d->screenGeometry();
+}
+
+int QEvdevTouchScreenHandler::prediction() const
+{
+    return d->m_prediction;
+}
+
 void QEvdevTouchScreenHandler::registerTouchDevice()
 {
     if (m_device)
@@ -828,9 +838,10 @@ void QEvdevTouchScreenHandlerThreadBase::scheduleTouchPointUpdate()
 
 bool QEvdevTouchScreenHandlerThreadBase::eventFilter(QObject *object, QEvent *event)
 {
-    if (m_touchUpdatePending && object == m_filterWindow && event->type() == QEvent::UpdateRequest) {
+    if (m_touchUpdatePending && object == m_filterWindow && event->type() == QEvent::UpdateRequest)
+    {
         m_touchUpdatePending = false;
-        filterAndSendTouchPoints();
+        applyFilterAndSendTouchPoints();
     }
     return false;
 }
@@ -839,6 +850,120 @@ void QEvdevTouchScreenHandlerThreadBase::notifyTouchDeviceRegistered()
 {
     m_touchDeviceRegistered = true;
     emit touchDeviceRegistered();
+}
+
+float QEvdevTouchScreenHandlerThreadBase::calculateUpdatedTouchRate(float old_rate, double touch_delta) const
+{
+    float vsync_delta = 1.0f / QGuiApplication::primaryScreen()->refreshRate();
+
+    // We're at the very start, with nothing to go on, so make a guess
+    // that the touch rate will be somewhere in the range of half a vsync.
+    // This doesn't have to be accurate as we will calibrate it over time,
+    // but it gives us a better starting point so calibration will be
+    // slightly quicker. If, on the other hand, we already have an
+    // estimate, we'll leave it as is and keep it.
+    if (old_rate < 0)
+    {
+        return vsync_delta / 2.0;
+    }
+    
+    if (touch_delta < vsync_delta)
+    {
+        // Update our estimate for the touch rate. We're making the assumption
+        // that this value will be mostly accurate with the occational bump,
+        // so we're weighting the existing value high compared to the update.
+        const double ratio = 0.9;
+        return sqrt(old_rate * old_rate * ratio + touch_delta * touch_delta * (1.0 - ratio));
+    }
+
+    return old_rate;
+}
+
+QHash<int, QEvdevTouchScreenHandlerThreadBase::FilteredTouchPoint> QEvdevTouchScreenHandlerThreadBase::filterAndSendTouchPoints(QRect screen_geometry,
+                                                                                                                                TouchData data,
+                                                                                                                                float touch_rate,
+                                                                                                                                QHash<int, QEvdevTouchScreenHandlerThreadBase::FilteredTouchPoint> filtered_points,
+                                                                                                                                int prediction,
+                                                                                                                                QTouchDevice * touch_device) const
+{
+    float vsync_delta = 1.0f / QGuiApplication::primaryScreen()->refreshRate();
+    QHash<int, FilteredTouchPoint> new_filtered_points;
+
+    for (int i=0; i < data.TouchPoints.size(); ++i)
+    {
+        QWindowSystemInterface::TouchPoint &tp = data.TouchPoints[i];
+        QPointF pos = tp.normalPosition;
+        FilteredTouchPoint f;
+
+        QPointF velocity;
+
+        for (const auto & last_point : data.LastTouchPoints)
+        {
+            if (last_point.id == tp.id)
+            {
+                velocity = (pos - last_point.normalPosition) / touch_rate;
+                break;
+            }
+        }
+
+        if (filtered_points.contains(tp.id))
+        {
+            f = filtered_points.take(tp.id);
+            f.x.update(pos.x(), velocity.x(), vsync_delta);
+            f.y.update(pos.y(), velocity.y(), vsync_delta);
+            pos = QPointF(f.x.position(), f.y.position());
+        }
+        else
+        {
+            f.x.initialize(pos.x(), velocity.x());
+            f.y.initialize(pos.y(), velocity.y());
+            // Make sure the first instance of a touch point we send has the
+            // 'pressed' state.
+            if (tp.state != Qt::TouchPointPressed)
+            {
+                tp.state = Qt::TouchPointPressed;
+            }
+        }
+
+        tp.velocity = QVector2D(f.x.velocity() * screen_geometry.width(), f.y.velocity() * screen_geometry.height());
+
+        qreal filteredNormalizedX = f.x.position() + f.x.velocity() * prediction / 1000.0;
+        qreal filteredNormalizedY = f.y.position() + f.y.velocity() * prediction / 1000.0;
+
+        // Clamp to the screen
+        tp.normalPosition = QPointF(qBound<qreal>(0, filteredNormalizedX, 1),
+                                    qBound<qreal>(0, filteredNormalizedY, 1));
+
+        qreal x = screen_geometry.x() + (tp.normalPosition.x() * (screen_geometry.width() - 1));
+        qreal y = screen_geometry.y() + (tp.normalPosition.y() * (screen_geometry.height() - 1));
+
+        tp.area.moveCenter(QPointF(x, y));
+
+        // Store the touch point for later so we can release it if we've
+        // missed the actual release between our last update and this.
+        f.touchPoint = tp;
+
+        // Don't store the point for future reference if it is a release.
+        if (tp.state != Qt::TouchPointReleased)
+        {
+            new_filtered_points[tp.id] = f;
+        }
+    }
+
+    for (QHash<int, FilteredTouchPoint>::const_iterator it = filtered_points.constBegin(), end = filtered_points.constEnd(); it != end; ++it)
+    {
+        const FilteredTouchPoint &f = it.value();
+        QWindowSystemInterface::TouchPoint tp = f.touchPoint;
+        tp.state = Qt::TouchPointReleased;
+        tp.velocity = QVector2D();
+        data.TouchPoints.append(tp);
+    }
+
+    QWindowSystemInterface::handleTouchEvent(nullptr,
+                                             touch_device,
+                                             data.TouchPoints);
+
+    return new_filtered_points;
 }
 
 
@@ -875,128 +1000,92 @@ void QEvdevTouchScreenHandlerThread::run()
     m_handler = nullptr;
 }
 
-void QEvdevTouchScreenHandlerThread::filterAndSendTouchPoints()
+void QEvdevTouchScreenHandlerThread::applyFilterAndSendTouchPoints()
 {
-    QRect winRect = m_handler->d->screenGeometry();
-    if (winRect.isNull())
+    QRect screen_geometry = m_handler->screenGeometry();
+    if (screen_geometry.isNull())
+    {
         return;
-
-    if (m_touchRate < 0.0f)
-    {
-        qCDebug(qLcEvdevTouch, "evdevtouch: screen geometry: (%d, %d) widht/height: (%d, %d)", 
-                                winRect.x(),
-                                winRect.y(),
-                                winRect.width(),
-                                winRect.height());
     }
 
-    float vsyncDelta = 1.0f / QGuiApplication::primaryScreen()->refreshRate();
+    auto data   = m_handler->getTouchData();
+    m_touchRate = calculateUpdatedTouchRate(m_touchRate, data.TouchDelta);
 
-    QHash<int, FilteredTouchPoint> filteredPoints;
+    m_filteredPoints    = filterAndSendTouchPoints(screen_geometry,
+                                                   data,
+                                                   m_touchRate,
+                                                   m_filteredPoints,
+                                                   m_handler->prediction(),
+                                                   m_handler->touchDevice());
+}
 
-    auto data = m_handler->getTouchData();
 
-    if (m_touchRate < 0 || data.TouchDelta > vsyncDelta)
+
+
+QEvdevTouchMultiScreenHandlerThread::QEvdevTouchMultiScreenHandlerThread(const QStringList& devices, const QString &spec, QObject *parent)
+    : QEvdevTouchScreenHandlerThreadBase(parent)
+    , m_devices(devices)
+    , m_spec(spec)
+    , m_touch_handlers()
+{
+    start();
+}
+
+QEvdevTouchMultiScreenHandlerThread::~QEvdevTouchMultiScreenHandlerThread()
+{
+    quit();
+    wait();
+}
+
+void QEvdevTouchMultiScreenHandlerThread::run()
+{
+    for (const auto & device : m_devices)
     {
-        // We're at the very start, with nothing to go on, so make a guess
-        // that the touch rate will be somewhere in the range of half a vsync.
-        // This doesn't have to be accurate as we will calibrate it over time,
-        // but it gives us a better starting point so calibration will be
-        // slightly quicker. If, on the other hand, we already have an
-        // estimate, we'll leave it as is and keep it.
-        if (m_touchRate < 0)
-        {
-            m_touchRate = vsyncDelta / 2.0;
-        }
-    }
-    else
+        m_touch_handlers.emplace_back(std::make_shared<QEvdevTouchScreenHandler>(device, m_spec));
+        auto& handler_data_ref = m_touch_handlers.back();
+
+        connect(handler_data_ref.Handler.get(),  &QEvdevTouchScreenHandler::touchPointsUpdated,
+                this,
+                [&handler_data_ref, this] ()
+                {
+                    handler_data_ref.RequiresUpdate = true;
+                    this->scheduleTouchPointUpdate();
+                });
+    }        
+
+    // Report the registration to the parent thread by invoking the method asynchronously
+    QMetaObject::invokeMethod(this, "notifyTouchDeviceRegistered", Qt::QueuedConnection);
+
+    exec();
+
+    m_touch_handlers.clear();
+}
+
+void QEvdevTouchMultiScreenHandlerThread::applyFilterAndSendTouchPoints()
+{
+    for (auto& handler_data : m_touch_handlers)
     {
-        // Update our estimate for the touch rate. We're making the assumption
-        // that this value will be mostly accurate with the occational bump,
-        // so we're weighting the existing value high compared to the update.
-        const double ratio = 0.9;
-        m_touchRate = sqrt(m_touchRate * m_touchRate * ratio + data.TouchDelta * data.TouchDelta * (1.0 - ratio));
+        auto screen_geometry = handler_data.Handler->screenGeometry();
+
+        if (screen_geometry.isNull() || !handler_data.RequiresUpdate)
+        {
+            continue;
+        }
+
+        // We will update the data so no update required but we set it false here so if there is an update event
+        // while we update the UI it gets properly handled
+        handler_data.RequiresUpdate = false;
+
+        auto data                   = handler_data.Handler->getTouchData();
+        handler_data.TouchRate      = calculateUpdatedTouchRate(handler_data.TouchRate, data.TouchDelta);
+
+        handler_data.FilteredPoints = filterAndSendTouchPoints(screen_geometry,
+                                                               data,
+                                                               handler_data.TouchRate,
+                                                               handler_data.FilteredPoints,
+                                                               handler_data.Handler->prediction(),
+                                                               handler_data.Handler->touchDevice());
     }
-
-    for (int i=0; i < data.TouchPoints.size(); ++i)
-    {
-        QWindowSystemInterface::TouchPoint &tp = data.TouchPoints[i];
-        QPointF pos = tp.normalPosition;
-        FilteredTouchPoint f;
-
-        QWindowSystemInterface::TouchPoint ltp;
-        ltp.id = -1;
-        for (const auto & last_point : data.LastTouchPoints)
-        {
-            if (last_point.id == tp.id)
-            {
-                ltp = last_point;
-                break;
-            }
-        }
-
-        QPointF velocity;
-        if (ltp.id >= 0)
-        {
-            velocity = (pos - ltp.normalPosition) / m_touchRate;
-        }
-
-        if (m_filteredPoints.contains(tp.id))
-        {
-            f = m_filteredPoints.take(tp.id);
-            f.x.update(pos.x(), velocity.x(), vsyncDelta);
-            f.y.update(pos.y(), velocity.y(), vsyncDelta);
-            pos = QPointF(f.x.position(), f.y.position());
-        }
-        else
-        {
-            f.x.initialize(pos.x(), velocity.x());
-            f.y.initialize(pos.y(), velocity.y());
-            // Make sure the first instance of a touch point we send has the
-            // 'pressed' state.
-            if (tp.state != Qt::TouchPointPressed)
-            {
-                tp.state = Qt::TouchPointPressed;
-            }
-        }
-
-        tp.velocity = QVector2D(f.x.velocity() * winRect.width(), f.y.velocity() * winRect.height());
-
-        qreal filteredNormalizedX = f.x.position() + f.x.velocity() * m_handler->d->m_prediction / 1000.0;
-        qreal filteredNormalizedY = f.y.position() + f.y.velocity() * m_handler->d->m_prediction / 1000.0;
-
-        // Clamp to the screen
-        tp.normalPosition = QPointF(qBound<qreal>(0, filteredNormalizedX, 1),
-                                    qBound<qreal>(0, filteredNormalizedY, 1));
-
-        qreal x = winRect.x() + (tp.normalPosition.x() * (winRect.width() - 1));
-        qreal y = winRect.y() + (tp.normalPosition.y() * (winRect.height() - 1));
-
-        tp.area.moveCenter(QPointF(x, y));
-
-        // Store the touch point for later so we can release it if we've
-        // missed the actual release between our last update and this.
-        f.touchPoint = tp;
-
-        // Don't store the point for future reference if it is a release.
-        if (tp.state != Qt::TouchPointReleased)
-            filteredPoints[tp.id] = f;
-    }
-
-    for (QHash<int, FilteredTouchPoint>::const_iterator it = m_filteredPoints.constBegin(), end = m_filteredPoints.constEnd(); it != end; ++it)
-    {
-        const FilteredTouchPoint &f = it.value();
-        QWindowSystemInterface::TouchPoint tp = f.touchPoint;
-        tp.state = Qt::TouchPointReleased;
-        tp.velocity = QVector2D();
-        data.TouchPoints.append(tp);
-    }
-
-    m_filteredPoints = filteredPoints;
-
-    QWindowSystemInterface::handleTouchEvent(nullptr,
-                                             m_handler->touchDevice(),
-                                             data.TouchPoints);
 }
 
 
