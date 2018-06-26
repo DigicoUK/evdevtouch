@@ -138,6 +138,7 @@ public:
     int hw_range_y_max;
     int hw_pressure_min;
     int hw_pressure_max;
+    int screen_x_offset;
     QString hw_name;
     QString deviceNode;
     bool m_forceToActiveWindow;
@@ -168,16 +169,28 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, co
       hw_range_x_min(0), hw_range_x_max(0),
       hw_range_y_min(0), hw_range_y_max(0),
       hw_pressure_min(0), hw_pressure_max(0),
+      screen_x_offset(0),
       m_forceToActiveWindow(false), m_typeB(false), m_singleTouch(false),
       m_filtered(false), m_prediction(0)
 {
-    for (const QString &arg : args) {
+    for (const QString &arg : args)
+    {
         if (arg == QStringLiteral("force_window"))
+        {
             m_forceToActiveWindow = true;
+        }
         else if (arg == QStringLiteral("filtered"))
+        {
             m_filtered = true;
+        }
         else if (arg.startsWith(QStringLiteral("prediction=")))
+        {
             m_prediction = arg.mid(11).toInt();
+        }
+        else if (arg.startsWith(QStringLiteral("x_offset=")))
+        {
+            screen_x_offset = arg.mid(9).toInt();
+        }
     }
 }
 
@@ -275,6 +288,8 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, const 
             d->m_filtered ? "yes" : "no");
     if (d->m_filtered)
         qCDebug(qLcEvdevTouch, " - prediction=%d", d->m_prediction);
+
+    qCDebug(qLcEvdevTouch, " - x_offset=%d", d->screen_x_offset);
 
     input_absinfo absInfo;
     memset(&absInfo, 0, sizeof(input_absinfo));
@@ -785,7 +800,7 @@ void QEvdevTouchScreenData::reportPoints()
         // Generate a screen position that is always inside the active window
         // or the primary screen.  Even though we report this as a QRectF, internally
         // Qt uses QRect/QPoint so we need to bound the size to winRect.size() - QSize(1, 1)
-        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1);
+        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1) + screen_x_offset;
         const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
         const qreal sizeRatio = (winRect.width() + winRect.height()) / qreal(hw_w + hw_h);
         if (tp.area.width() == -1) // touch major was not provided
@@ -1041,16 +1056,20 @@ void QEvdevTouchMultiScreenHandlerThread::run()
 {
     for (const auto & device : m_devices)
     {
-        m_touch_handlers.emplace_back(std::make_shared<QEvdevTouchScreenHandler>(device, m_spec));
+        auto device_spec = m_spec;
+        bool ok;
+        int x_offset_multiplier = device.right(1).toInt(&ok);
+        
+        if (ok)
+        {
+            device_spec.append(QString("x_offset=%1").arg(x_offset_multiplier * 1280));
+        }
+
+        m_touch_handlers.emplace_back(std::make_shared<QEvdevTouchScreenHandler>(device, device_spec));
         auto& handler_data_ref = m_touch_handlers.back();
 
         connect(handler_data_ref.Handler.get(),  &QEvdevTouchScreenHandler::touchPointsUpdated,
-                this,
-                [&handler_data_ref, this] ()
-                {
-                    handler_data_ref.RequiresUpdate = true;
-                    this->scheduleTouchPointUpdate();
-                });
+                this,                            &QEvdevTouchMultiScreenHandlerThread::scheduleTouchPointUpdate);
     }        
 
     // Report the registration to the parent thread by invoking the method asynchronously
@@ -1067,14 +1086,14 @@ void QEvdevTouchMultiScreenHandlerThread::applyFilterAndSendTouchPoints()
     {
         auto screen_geometry = handler_data.Handler->screenGeometry();
 
-        if (screen_geometry.isNull() || !handler_data.RequiresUpdate)
+        if (screen_geometry.isNull()) // || !handler_data.RequiresUpdate)
         {
             continue;
         }
 
         // We will update the data so no update required but we set it false here so if there is an update event
         // while we update the UI it gets properly handled
-        handler_data.RequiresUpdate = false;
+        // ....
 
         auto data                   = handler_data.Handler->getTouchData();
         handler_data.TouchRate      = calculateUpdatedTouchRate(handler_data.TouchRate, data.TouchDelta);

@@ -191,15 +191,12 @@ private:
             : Handler(std::move(handler))
             , FilteredPoints()
             , TouchRate(-1.0f)
-            , RequiresUpdate(true)
         {}
 
         std::shared_ptr<QEvdevTouchScreenHandler>   Handler;
         QHash<int, FilteredTouchPoint>              FilteredPoints;
         float                                       TouchRate;
-        bool                                        RequiresUpdate;
     };
-
 
     QStringList                     m_devices;
     QString                         m_spec;
