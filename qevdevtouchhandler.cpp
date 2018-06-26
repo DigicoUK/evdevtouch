@@ -800,7 +800,7 @@ void QEvdevTouchScreenData::reportPoints()
         // Generate a screen position that is always inside the active window
         // or the primary screen.  Even though we report this as a QRectF, internally
         // Qt uses QRect/QPoint so we need to bound the size to winRect.size() - QSize(1, 1)
-        const qreal wx = winRect.left() + tp.normalPosition.x() * (winRect.width() - 1) + screen_x_offset;
+        const qreal wx = winRect.left() + tp.normalPosition.x() * (1280 - 1) /*(winRect.width() - 1)*/ + screen_x_offset;
         const qreal wy = winRect.top() + tp.normalPosition.y() * (winRect.height() - 1);
         const qreal sizeRatio = (winRect.width() + winRect.height()) / qreal(hw_w + hw_h);
         if (tp.area.width() == -1) // touch major was not provided
@@ -1062,7 +1062,7 @@ void QEvdevTouchMultiScreenHandlerThread::run()
         
         if (ok)
         {
-            device_spec.append(QString("x_offset=%1").arg(x_offset_multiplier * 1280));
+            device_spec.append(QStringLiteral(":x_offset=%1").arg(x_offset_multiplier * 1280));
         }
 
         m_touch_handlers.emplace_back(std::make_shared<QEvdevTouchScreenHandler>(device, device_spec));
