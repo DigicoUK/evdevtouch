@@ -107,19 +107,19 @@ void QEvdevTouchManager::addDevice(const QString &deviceNode)
     auto device_name    = deviceNode;
     int  x_offset       = 0;
 
-    if (deviceNode.contains("(x_offset="))
+    if (deviceNode.contains(QStringLiteral("(x_offset=")))
     {
-        device_name = deviceNode.mid(0, deviceNode.indexOf('('));
+        device_name = deviceNode.mid(0, deviceNode.indexOf(QChar::fromLatin1('(')));
         // As the data is something like this: /dev/input/ts0(x_offset=xxxx)
         // we take everything after = char and then replace the last ) character
-        x_offset = deviceNode.mid(deviceNode.indexOf('=') + 1)
+        x_offset = deviceNode.mid(deviceNode.indexOf(QChar::fromLatin1('=')) + 1)
                              .replace(QStringLiteral(")"), QStringLiteral(""))
                              .toInt(); // Returns 0 if it fails
     }
 
     qCDebug(qLcEvdevTouch) << "evdevtouch: Adding device at" << deviceNode;
     QEvdevTouchScreenHandlerThread *handler;
-    handler = new QEvdevTouchScreenHandlerThread(device_name, x_offset, m_spec);
+    handler = new QEvdevTouchScreenHandlerThread(device_name, x_offset, m_activeDevices.size(), m_spec);
     if (handler) {
         m_activeDevices.insert(deviceNode, handler);
         connect(handler, &QEvdevTouchScreenHandlerThread::touchDeviceRegistered, this, &QEvdevTouchManager::updateInputDeviceCount);
