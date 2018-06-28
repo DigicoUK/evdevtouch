@@ -797,7 +797,7 @@ void QEvdevTouchScreenData::reportPoints()
 
         if (tp.state == Qt::TouchPointReleased || tp.state == Qt::TouchPointPressed)
         {
-            qCDebug(qLcEvdevTouch, "evdevtouch: Reporting touch point with id %d and position (%d, %d) state: %s",
+            qCDebug(qLcEvdevTouch, "evdevtouch: Reporting touch point with id %d and position (%f, %f) state: %s",
                     tp.id, wx, wy, ((tp.state == Qt::TouchPointReleased) ? "released" : "pressed"));
         }
     }
