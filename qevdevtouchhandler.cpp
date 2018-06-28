@@ -193,7 +193,7 @@ static inline bool testBit(long bit, const long *array)
 }
 #endif
 
-QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int device_id, const QString &spec, int x_offset, QObject *parent)
+QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int /*device_id*/, const QString &spec, int x_offset, QObject *parent)
     : QObject(parent), m_notify(nullptr), m_fd(-1), d(nullptr), m_device(nullptr)
 #if QT_CONFIG(mtdev)
       , m_mtdev(nullptr)
@@ -249,7 +249,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int de
     }
 #endif
 
-    d = new QEvdevTouchScreenData(this, args);
+    d = new QEvdevTouchScreenData(this, args, x_offset);
 
 #if QT_CONFIG(mtdev)
     const char *mtdevStr = "(mtdev)";
@@ -500,6 +500,7 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
 {
     if (data->type == EV_ABS) {
+        qCDebug(qLcEvdevTouch, "evdevtouch: EV_ABS");
 
         if (data->code == ABS_MT_POSITION_X || (m_singleTouch && data->code == ABS_X)) {
             m_currentData.x = qBound(hw_range_x_min, data->value, hw_range_x_max);
@@ -548,6 +549,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
     } else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN) {
 
+        qCDebug(qLcEvdevTouch, "evdevtouch: EV_SYN");
         // If there is no tracking id, one will be generated later.
         // Until that use a temporary key.
         int key = m_currentData.trackingId;
@@ -559,6 +561,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 
     } else if (data->type == EV_SYN && data->code == SYN_REPORT) {
 
+        qCDebug(qLcEvdevTouch, "evdevtouch: SYN_REPORT");
         // Ensure valid IDs even when the driver does not report ABS_MT_TRACKING_ID.
         if (!m_contacts.isEmpty() && m_contacts.constBegin().value().trackingId == -1)
             assignIds();

@@ -117,14 +117,14 @@ void QEvdevTouchManager::addDevice(const QString &deviceNode)
                              .toInt(); // Returns 0 if it fails
     }
 
-    qCDebug(qLcEvdevTouch) << "evdevtouch: Adding device at" << deviceNode;
+    qCDebug(qLcEvdevTouch) << "evdevtouch: Adding device at" << device_name;
     QEvdevTouchScreenHandlerThread *handler;
     handler = new QEvdevTouchScreenHandlerThread(device_name, x_offset, m_activeDevices.size(), m_spec);
     if (handler) {
         m_activeDevices.insert(deviceNode, handler);
         connect(handler, &QEvdevTouchScreenHandlerThread::touchDeviceRegistered, this, &QEvdevTouchManager::updateInputDeviceCount);
     } else {
-        qWarning("evdevtouch: Failed to open touch device %s", qPrintable(deviceNode));
+        qWarning("evdevtouch: Failed to open touch device %s", qPrintable(device_name));
     }
 }
 
