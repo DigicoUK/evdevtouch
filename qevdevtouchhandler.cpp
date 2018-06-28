@@ -92,10 +92,12 @@ Q_LOGGING_CATEGORY(qLcEvdevTouch, "qt.qpa.input")
 #define SYN_MT_REPORT           2
 #endif
 
+#define POINT_ID_SPACE          10000
+
 class QEvdevTouchScreenData
 {
 public:
-    QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args, int x_offset);
+    QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args, int x_offset, int device_id);
 
     void processInputEvent(input_event *data);
     void assignIds();
@@ -107,13 +109,14 @@ public:
 
     struct Contact {
         int trackingId;
+        int pointId;
         int x;
         int y;
         int maj;
         int pressure;
         Qt::TouchPointState state;
         QTouchEvent::TouchPoint::InfoFlags flags;
-        Contact() : trackingId(-1),
+        Contact() : trackingId(-1), pointId(-1),
             x(0), y(0), maj(-1), pressure(0),
             state(Qt::TouchPointPressed), flags(0) { }
     };
@@ -129,6 +132,8 @@ public:
     void addTouchPoint(const Contact &contact, Qt::TouchPointStates *combinedStates);
     void reportPoints();
     void loadMultiScreenMappings();
+
+    int newPointId();
 
     QRect screenGeometry() const;
 
@@ -159,9 +164,14 @@ public:
     // When filtering is enabled, protect the access to current and last
     // timeStamp and touchPoints, as these are being read on the gui thread.
     QMutex m_mutex;
+
+private:
+    // Point id generation:
+    int m_device_id;
+    int m_current_point_id;
 };
 
-QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args, int x_offset)
+QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, const QStringList &args, int x_offset, int device_id)
     : q(q_ptr),
       m_lastEventType(-1),
       m_currentSlot(0),
@@ -172,6 +182,8 @@ QEvdevTouchScreenData::QEvdevTouchScreenData(QEvdevTouchScreenHandler *q_ptr, co
       m_forceToActiveWindow(false), m_typeB(false), m_singleTouch(false),
       m_x_offset(x_offset),
       m_filtered(false), m_prediction(0)
+    , m_device_id(device_id)
+    , m_current_point_id(device_id * POINT_ID_SPACE)
 {
     for (const QString &arg : args) {
         if (arg == QStringLiteral("force_window"))
@@ -193,7 +205,7 @@ static inline bool testBit(long bit, const long *array)
 }
 #endif
 
-QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int /*device_id*/, const QString &spec, int x_offset, QObject *parent)
+QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int device_id, const QString &spec, int x_offset, QObject *parent)
     : QObject(parent), m_notify(nullptr), m_fd(-1), d(nullptr), m_device(nullptr)
 #if QT_CONFIG(mtdev)
       , m_mtdev(nullptr)
@@ -249,7 +261,7 @@ QEvdevTouchScreenHandler::QEvdevTouchScreenHandler(const QString &device, int /*
     }
 #endif
 
-    d = new QEvdevTouchScreenData(this, args, x_offset);
+    d = new QEvdevTouchScreenData(this, args, x_offset, device_id);
 
 #if QT_CONFIG(mtdev)
     const char *mtdevStr = "(mtdev)";
@@ -475,7 +487,7 @@ void QEvdevTouchScreenHandler::unregisterTouchDevice()
 void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPointStates *combinedStates)
 {
     QWindowSystemInterface::TouchPoint tp;
-    tp.id = contact.trackingId;
+    tp.id = contact.pointId;
     tp.flags = contact.flags;
     tp.state = contact.state;
     *combinedStates |= tp.state;
@@ -528,6 +540,7 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
                 } else {
                     m_contacts[m_currentSlot].state = Qt::TouchPointPressed;
                     m_contacts[m_currentSlot].trackingId = m_currentData.trackingId;
+                    m_contacts[m_currentSlot].pointId = newPointId();
                 }
             }
         } else if (data->code == ABS_MT_TOUCH_MAJOR) {
@@ -549,7 +562,6 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
             m_contacts[m_currentSlot].state = Qt::TouchPointReleased;
     } else if (data->type == EV_SYN && data->code == SYN_MT_REPORT && m_lastEventType != EV_SYN) {
 
-        qCDebug(qLcEvdevTouch, "evdevtouch: EV_SYN");
         // If there is no tracking id, one will be generated later.
         // Until that use a temporary key.
         int key = m_currentData.trackingId;
@@ -561,7 +573,6 @@ void QEvdevTouchScreenData::processInputEvent(input_event *data)
 
     } else if (data->type == EV_SYN && data->code == SYN_REPORT) {
 
-        qCDebug(qLcEvdevTouch, "evdevtouch: SYN_REPORT");
         // Ensure valid IDs even when the driver does not report ABS_MT_TRACKING_ID.
         if (!m_contacts.isEmpty() && m_contacts.constBegin().value().trackingId == -1)
             assignIds();
@@ -716,6 +727,7 @@ void QEvdevTouchScreenData::assignIds()
     if (candidates.isEmpty()) {
         for (it = pending.begin(), ite = pending.end(); it != ite; ++it) {
             it->trackingId = ++maxId;
+            it->pointId = newPointId();
             newContacts.insert(it->trackingId, *it);
         }
     }
@@ -811,6 +823,18 @@ void QEvdevTouchScreenData::reportPoints()
     {
         QWindowSystemInterface::handleTouchEvent(nullptr, q->touchDevice(), m_touchPoints);
     }
+}
+
+int QEvdevTouchScreenData::newPointId()
+{
+    ++m_current_point_id;
+
+    if (m_current_point_id >= ((m_device_id + 1) * POINT_ID_SPACE))
+    {
+        m_current_point_id = m_device_id * POINT_ID_SPACE;
+    }
+
+    return m_current_point_id;
 }
 
 QEvdevTouchScreenHandlerThread::QEvdevTouchScreenHandlerThread(const QString &device, int x_offset, int device_id, const QString &spec, QObject *parent)
