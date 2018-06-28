@@ -512,8 +512,6 @@ void QEvdevTouchScreenData::addTouchPoint(const Contact &contact, Qt::TouchPoint
 void QEvdevTouchScreenData::processInputEvent(input_event *data)
 {
     if (data->type == EV_ABS) {
-        qCDebug(qLcEvdevTouch, "evdevtouch: EV_ABS");
-
         if (data->code == ABS_MT_POSITION_X || (m_singleTouch && data->code == ABS_X)) {
             m_currentData.x = qBound(hw_range_x_min, data->value, hw_range_x_max);
             if (m_singleTouch)
